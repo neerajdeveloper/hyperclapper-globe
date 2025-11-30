@@ -311,6 +311,44 @@
     }
   }
 
+  /* Sound Toggle Button */
+  #sound-toggle-btn {
+    position: absolute;
+    bottom: 60px;
+    right: 20px;
+    z-index: 10000;
+    padding: 8px 16px;
+    background: rgba(0, 23, 45, 0.7);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #sound-toggle-btn:hover {
+    background: rgba(0, 23, 45, 0.85);
+    border-color: rgba(0,234,255,0.6);
+    transform: scale(1.05);
+  }
+
+  body.day-mode #sound-toggle-btn {
+    background: rgba(255,255,255,0.8);
+    border-color: rgba(13,87,149,0.3);
+    color: rgba(11, 31, 58, 0.9);
+  }
+
+  body.day-mode #sound-toggle-btn:hover {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(13,87,149,0.5);
+  }
+
   /* Engagement Heat Bar */
   #heat-bar {
     position: absolute;
@@ -965,8 +1003,25 @@
   <span>Powered by Hyperclapper</span>
 </div>
 
+<!-- Sound Toggle Button -->
+<button id="sound-toggle-btn">🔊 Sound On</button>
+
+<!-- Audio Elements -->
+<audio id="bg-music" loop>
+  <source src="assets/bg-music.mp3" type="audio/mpeg">
+</audio>
+<audio id="like-sound" preload="auto">
+  <source src="assets/like.mp3" type="audio/mpeg">
+</audio>
+<audio id="comment-sound" preload="auto">
+  <source src="assets/comment.mp3" type="audio/mpeg">
+</audio>
+
 <!-- Hover Card Container -->
 <div id="hover-card-container"></div>
+
+<!-- Sound Manager Script -->
+<script src="soundManager.js"></script>
 
 <script>
 
@@ -1141,6 +1196,16 @@ function updateFogForMode() {
       'star-intensity': 0.6
     });
   }
+}
+
+// Sound Toggle Button Event Listener
+const soundToggleBtn = document.getElementById('sound-toggle-btn');
+if (soundToggleBtn) {
+  soundToggleBtn.addEventListener('click', () => {
+    if (window.toggleSound) {
+      window.toggleSound();
+    }
+  });
 }
 
 modeToggleBtn.addEventListener("click", () => {
@@ -2946,6 +3011,13 @@ async function runEventLoop() {
     trackEngagement(e); // Track the engagement
     addFeedItem(e);
     await addAvatar(e);
+    
+    // Play sound effects
+    if (e.type === 'Like' && window.playLikeSound) {
+      window.playLikeSound();
+    } else if (e.type === 'Comment' && window.playCommentSound) {
+      window.playCommentSound();
+    }
       } else if (e.type === 'Boost') {
         // Track boost events but don't show popup
         const dailyCounters = window.fakeDataEngine.dailyCounters;
