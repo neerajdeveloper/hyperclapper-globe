@@ -1,15 +1,23 @@
 {
+  "builds": [
+    {
+      "src": "hyperclapper/index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "hyperclapper/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Frame-Options", "value": "ALLOWALL" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors *" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
+        { "key": "Content-Security-Policy", "value": "frame-ancestors *" }
       ]
     }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
