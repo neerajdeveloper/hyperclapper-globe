@@ -2946,6 +2946,7 @@ async function runEventLoop() {
     trackEngagement(e); // Track the engagement
     addFeedItem(e);
     await addAvatar(e);
+    
       } else if (e.type === 'Boost') {
         // Track boost events but don't show popup
         const dailyCounters = window.fakeDataEngine.dailyCounters;
