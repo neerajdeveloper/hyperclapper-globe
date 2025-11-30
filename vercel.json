@@ -1,0 +1,10 @@
+{
+  "builds": [{
+    "src": "hyperclapper/index.html",
+    "use": "@vercel/static"
+  }],
+  "routes": [{
+    "src": "/(.*)",
+    "dest": "hyperclapper/index.html"
+  }]
+}
