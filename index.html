@@ -1,0 +1,3288 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hyperclapper Live Engagement Map</title>
+
+<!-- Mapbox -->
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+
+<style>
+  :root {
+    --space-gradient: radial-gradient(circle at 20% 20%, rgba(10,20,40,0.5), transparent 45%),
+                      radial-gradient(circle at 80% 10%, rgba(20,30,60,0.4), transparent 50%),
+                      radial-gradient(circle at 50% 80%, rgba(15,15,25,0.6), transparent 60%),
+                      #000010;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--space-gradient);
+    color: #fff;
+    font-family: Inter, Arial, sans-serif;
+  }
+
+  body.day-mode {
+    --space-gradient: radial-gradient(circle at 35% 25%, rgba(180,210,255,0.7), transparent 45%),
+                      radial-gradient(circle at 70% 20%, rgba(150,200,255,0.6), transparent 60%),
+                      linear-gradient(180deg, #9ecbff 0%, #cfe7ff 40%, #f4fbff 100%);
+    color: #0b1f3a;
+  }
+  #map {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hide Mapbox watermarks and attribution */
+  .mapboxgl-ctrl-logo,
+  .mapboxgl-ctrl-attrib {
+    display: none !important;
+  }
+  .starfield {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    --star-color: rgba(255,255,255,0.9);
+    background-image:
+      radial-gradient(var(--star-color) 1px, transparent 1px),
+      radial-gradient(var(--star-color) 1px, transparent 1px);
+    background-size: 600px 600px, 400px 400px;
+    background-position: 0 0, 200px 200px;
+    opacity: 0.6;
+    animation: twinkle 12s linear infinite;
+  }
+
+  body.day-mode .starfield {
+    --star-color: rgba(255,255,255,0.5);
+    opacity: 0.35;
+  }
+
+  @keyframes twinkle {
+    0% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.02); }
+    100% { opacity: 0.4; transform: scale(1); }
+  }
+
+  .mode-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    padding: 10px 16px;
+    background: rgba(0, 23, 45, 0.7);
+    border: 1px solid rgba(0,234,255,0.6);
+    color: #fff;
+    font-size: 13px;
+    border-radius: 999px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.3s ease, color 0.3s ease, border 0.3s ease;
+  }
+
+  body.day-mode .mode-toggle {
+    background: rgba(255,255,255,0.8);
+    border-color: rgba(13,87,149,0.4);
+    color: #0b1f3a;
+  }
+
+  /* Video Export Controls */
+  #video-export-panel {
+    position: absolute;
+    top: 120px;
+    left: 20px;
+    z-index: 10000;
+    background: rgba(0, 23, 45, 0.85);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 12px;
+    padding: 12px 16px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  body.day-mode #video-export-panel {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(13,87,149,0.3);
+    color: #0b1f3a;
+  }
+
+  #record-btn {
+    padding: 8px 16px;
+    background: rgba(255, 95, 162, 0.8);
+    border: 1px solid #ff5fa2;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  #record-btn:hover {
+    background: rgba(255, 95, 162, 1);
+    transform: scale(1.05);
+  }
+
+  #record-btn.recording {
+    background: rgba(255, 0, 0, 0.872);
+    border-color: #ff0000;
+    animation: recordingPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes recordingPulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+    }
+  }
+
+  #record-timer {
+    font-size: 12px;
+    opacity: 0.8;
+    min-width: 60px;
+  }
+
+  #record-quality {
+    font-size: 11px;
+    opacity: 0.7;
+    padding: 4px 8px;
+    background: rgba(0, 234, 255, 0.2);
+    border: 1px solid rgba(0, 234, 255, 0.4);
+    border-radius: 6px;
+    color: #00eaff;
+    font-weight: 600;
+  }
+
+  #embed-widget-btn {
+    padding: 8px 16px;
+    background: rgba(0, 234, 255, 0.8);
+    border: 1px solid #00eaff;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  #embed-widget-btn:hover {
+    background: rgba(0, 234, 255, 1);
+    transform: scale(1.05);
+  }
+
+  body.day-mode #record-btn,
+  body.day-mode #embed-widget-btn {
+    color: #fff;
+  }
+
+  /* Stats Counters Panel (Top Right) */
+  #stats-panel {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    z-index: 10000;
+    background: rgba(0, 23, 45, 0.85);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 12px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    min-width: 200px;
+    font-size: 13px;
+  }
+
+  body.day-mode #stats-panel {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(13,87,149,0.3);
+    color: #0b1f3a;
+  }
+
+  .stat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(0,234,255,0.2);
+  }
+
+  .stat-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .stat-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.9;
+  }
+
+  .stat-value {
+    font-weight: bold;
+    font-size: 16px;
+    color: #00eaff;
+  }
+
+  body.day-mode .stat-value {
+    color: #0d5795;
+  }
+
+  /* Leaderboard Panel (Bottom Right) */
+  #leaderboard-panel {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    z-index: 9999;
+    background: rgba(0, 23, 45, 0.85);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 12px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    min-width: 220px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  /* Powered by Hyperclapper Branding */
+  #powered-by {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(0, 23, 45, 0.7);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+    pointer-events: none;
+  }
+
+  body.day-mode #powered-by {
+    background: rgba(255,255,255,0.8);
+    border-color: rgba(13,87,149,0.3);
+    color: rgba(11, 31, 58, 0.8);
+  }
+
+  #powered-by-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00eaff, #ff5fa2);
+    position: relative;
+    animation: logoPulse 30s ease-in-out infinite;
+  }
+
+  @keyframes logoPulse {
+    0%, 95% {
+      box-shadow: 0 0 0 0 rgba(0, 234, 255, 0.7);
+    }
+    97.5% {
+      box-shadow: 0 0 0 15px rgba(0, 234, 255, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(0, 234, 255, 0);
+    }
+  }
+
+  /* Engagement Heat Bar */
+  #heat-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    z-index: 10001;
+    background: rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+  }
+
+  #heat-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, 
+      rgba(255, 95, 162, 0.8) 0%,
+      rgba(0, 234, 255, 0.8) 50%,
+      rgba(255, 95, 162, 0.8) 100%);
+    background-size: 200% 100%;
+    animation: heatFlow 3s linear infinite;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  @keyframes heatFlow {
+    0% {
+      background-position: 0% 0%;
+    }
+    100% {
+      background-position: 200% 0%;
+    }
+  }
+
+
+  /* Micro Sparkles */
+  .micro-sparkle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: sparkleTwinkle 3s ease-in-out infinite;
+  }
+
+  @keyframes sparkleTwinkle {
+    0%, 100% {
+      opacity: 0;
+      transform: scale(0.5);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.5);
+    }
+  }
+
+  /* User Hover Cards */
+  .hover-card {
+    position: absolute;
+    background: rgba(0, 23, 45, 0.95);
+    border: 1px solid rgba(0, 234, 255, 0.6);
+    border-radius: 12px;
+    padding: 12px;
+    backdrop-filter: blur(10px);
+    z-index: 10002;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    min-width: 180px;
+    font-size: 12px;
+  }
+
+  .hover-card.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .hover-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .hover-card-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-size: cover;
+    border: 2px solid #00eaff;
+  }
+
+  .hover-card-info {
+    flex: 1;
+  }
+
+  .hover-card-name {
+    font-weight: 600;
+    color: #00eaff;
+    margin-bottom: 2px;
+  }
+
+  .hover-card-location {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+
+  .hover-card-stats {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 234, 255, 0.2);
+  }
+
+  .hover-card-stat {
+    text-align: center;
+  }
+
+  .hover-card-stat-value {
+    font-weight: bold;
+    color: #00eaff;
+    font-size: 14px;
+  }
+
+  .hover-card-stat-label {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
+  body.day-mode #leaderboard-panel {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(13,87,149,0.3);
+    color: #0b1f3a;
+  }
+
+  #leaderboard-panel h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .leaderboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,234,255,0.1);
+  }
+
+  .leaderboard-item:last-child {
+    border-bottom: none;
+  }
+
+  .leaderboard-country {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .leaderboard-count {
+    font-weight: bold;
+    color: #00eaff;
+  }
+
+  body.day-mode .leaderboard-count {
+    color: #0d5795;
+  }
+
+  /* Engagement Timeline Graph */
+  #timeline-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 9999;
+    background: rgba(0, 23, 45, 0.85);
+    border: 1px solid rgba(0,234,255,0.4);
+    border-radius: 12px;
+    padding: 12px;
+    backdrop-filter: blur(10px);
+    width: 200px;
+    box-sizing: border-box;
+  }
+
+  body.day-mode #timeline-panel {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(13,87,149,0.3);
+    color: #0b1f3a;
+  }
+
+  #timeline-panel h3 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #timeline-canvas {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  /* Trending Alert */
+  .trending-alert {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10001;
+    background: rgba(255, 95, 162, 0.95);
+    border: 2px solid #ff5fa2;
+    border-radius: 16px;
+    padding: 20px 30px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 30px rgba(255, 95, 162, 0.6);
+    animation: trendingPulse 0.5s ease-out;
+    pointer-events: none;
+  }
+
+  .trending-alert-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #fff;
+  }
+
+  @keyframes trendingPulse {
+    0% {
+      transform: translate(-50%, -50%) scale(0.8);
+      opacity: 0;
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.05);
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Country Trending Glow */
+  .country-trending-glow {
+    animation: countryGlow 2s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(255, 95, 162, 0.8));
+  }
+
+  @keyframes countryGlow {
+    0%, 100% {
+      filter: drop-shadow(0 0 20px rgba(255, 95, 162, 0.8));
+    }
+    50% {
+      filter: drop-shadow(0 0 40px rgba(255, 95, 162, 1));
+    }
+  }
+
+  /* Avatar pins */
+  .avatar-pin {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-size: cover;
+    border: 2px solid #00eaff;
+    box-shadow: 0 0 12px #00eaff;
+    position: relative;
+    overflow: visible;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .avatar-pin.fade-out {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  /* Pulsating rings effect */
+  .pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border: 2px solid #00eaff;
+    border-radius: 50%;
+    opacity: 0.8;
+    animation: pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    pointer-events: none;
+  }
+
+  .pulse-ring:nth-child(2) {
+    animation-delay: 0.5s;
+  }
+
+  .pulse-ring:nth-child(3) {
+    animation-delay: 1s;
+  }
+
+  @keyframes pulseRing {
+    0% {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(3);
+      opacity: 0;
+    }
+  }
+
+  /* Shooting star line */
+  .shooting-star {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  .shooting-star-line {
+    stroke: #00eaff;
+    stroke-width: 2px;
+    stroke-dasharray: 5, 5;
+    filter: drop-shadow(0 0 4px rgba(0, 234, 255, 0.8));
+    animation: shootingStarMove 2s ease-out forwards;
+  }
+
+  @keyframes shootingStarMove {
+    0% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: -1000;
+      opacity: 0;
+    }
+  }
+
+  /* Enhanced floating stars */
+  .floating-star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+    animation: floatStar 15s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes floatStar {
+    0% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-100vh) translateX(50px);
+      opacity: 0;
+    }
+  }
+
+  /* Meteors */
+  .meteor {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(0, 234, 255, 0.8));
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0, 234, 255, 0.9), 0 0 20px rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  .meteor-trail {
+    position: absolute;
+    width: 1px;
+    height: 60px;
+    background: linear-gradient(to bottom, 
+      rgba(0, 234, 255, 0.9) 0%,
+      rgba(0, 234, 255, 0.5) 50%,
+      rgba(0, 234, 255, 0) 100%);
+    transform-origin: top center;
+    pointer-events: none;
+    z-index: 49;
+    filter: blur(0.5px);
+  }
+
+  @keyframes meteorFall {
+    0% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    5% {
+      opacity: 1;
+    }
+    95% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100vh) translateX(200px);
+      opacity: 0;
+    }
+  }
+
+  /* Small Satellites */
+  .small-satellite {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    z-index: 40;
+  }
+
+  @keyframes satelliteOrbit {
+    0% {
+      transform: rotate(0deg) translateX(150px) rotate(0deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: rotate(360deg) translateX(150px) rotate(-360deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes satelliteMove {
+    0% {
+      transform: translateX(-50px) translateY(0);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(calc(100vw + 50px)) translateY(80px);
+      opacity: 0;
+    }
+  }
+
+  /* Space Stones/Asteroids */
+  .space-stone {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(150, 150, 150, 0.6);
+    border-radius: 20%;
+    box-shadow: 0 0 3px rgba(150, 150, 150, 0.5);
+    pointer-events: none;
+    z-index: 30;
+  }
+
+  /* Big Space Stones/Asteroids */
+  .big-space-stone {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: rgba(120, 120, 120, 0.7);
+    border-radius: 30%;
+    box-shadow: 0 0 8px rgba(100, 100, 100, 0.6), inset 0 0 4px rgba(80, 80, 80, 0.4);
+    pointer-events: none;
+    z-index: 35;
+  }
+
+  @keyframes stoneFloat {
+    0% {
+      transform: translateX(0) translateY(0) rotate(0deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.6;
+    }
+    90% {
+      opacity: 0.6;
+    }
+    100% {
+      transform: translateX(150px) translateY(-100vh) rotate(360deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes bigStoneFloat {
+    0% {
+      transform: translateX(0) translateY(0) rotate(0deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.8;
+    }
+    90% {
+      opacity: 0.8;
+    }
+    100% {
+      transform: translateX(200px) translateY(-100vh) rotate(720deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes pulseHeat {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+
+.burst-icon {
+    position: absolute;
+    left: 50%;
+    top: -10px;
+    transform: translate(-50%, 0);
+    font-size: 18px;
+    animation: burstFloat 2s ease-out forwards;
+    pointer-events: none;
+  }
+
+  .burst-like {
+    color: #ff5fa2;
+    text-shadow: 0 0 8px rgba(255,95,162,0.8);
+    filter: drop-shadow(0 0 6px rgba(255,95,162,0.6));
+  }
+
+  .burst-comment {
+    color: #00eaff;
+    text-shadow: 0 0 8px rgba(0,234,255,0.8);
+    filter: drop-shadow(0 0 6px rgba(0,234,255,0.6));
+  }
+
+  @keyframes burstFloat {
+    0% { opacity: 0; transform: translate(-50%, 20px) scale(0.7); }
+    25% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -80px) scale(1.5); }
+  }
+
+  /* Bottom-left engagement feed */
+  #activity-feed {
+      position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 240px;
+    color: #fff;
+    z-index: 9999;
+    font-family: Inter, Arial, sans-serif;
+  }
+
+  .feed-item {
+    background: rgba(20,20,20,0.3);
+    padding: 8px 10px;
+    margin-top: 8px;
+    border-radius: 6px;
+    border-left: 3px solid rgba(0,234,255,0.5);
+    backdrop-filter: blur(4px);
+      opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s ease;
+    line-height: 1.2;
+    font-size: 12px;
+  }
+  
+  .feed-item.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .feed-location {
+    color: #00eaff;
+    font-weight: bold;
+  }
+
+</style>
+</head>
+
+<body>
+
+<div class="starfield"></div>
+<div id="map"></div>
+<div id="activity-feed"></div>
+<button id="modeToggle" class="mode-toggle">Switch to Day Mode</button>
+
+<!-- Video Export Panel -->
+<div id="video-export-panel">
+  <button id="record-btn">🎥 Record Video</button>
+  <span id="record-quality">4K</span>
+  <span id="record-timer"></span>
+  <button id="embed-widget-btn">📦 Get Embed Code</button>
+</div>
+
+<!-- Stats Counters Panel -->
+<div id="stats-panel">
+  <div class="stat-item">
+    <span class="stat-label">👍 Today's Likes</span>
+    <span class="stat-value" id="likes-count">0</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">💬 Today's Comments</span>
+    <span class="stat-value" id="comments-count">0</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">🚀 Boosts Today</span>
+    <span class="stat-value" id="boosts-count">0</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-label">🌎 Countries Active</span>
+    <span class="stat-value" id="countries-count">0</span>
+  </div>
+</div>
+
+<!-- Leaderboard Panel -->
+<div id="leaderboard-panel">
+  <h3>Top Countries This Hour</h3>
+  <div id="leaderboard-list"></div>
+</div>
+
+<!-- Engagement Timeline Graph -->
+<div id="timeline-panel">
+  <h3>Engagement Trend</h3>
+  <canvas id="timeline-canvas"></canvas>
+</div>
+
+<!-- Engagement Heat Bar -->
+<div id="heat-bar">
+  <div id="heat-bar-fill"></div>
+</div>
+
+<!-- Powered by Hyperclapper -->
+<div id="powered-by">
+  <div id="powered-by-logo"></div>
+  <span>Powered by Hyperclapper</span>
+</div>
+
+<!-- Hover Card Container -->
+<div id="hover-card-container"></div>
+
+<script>
+
+// 🔐 Insert your Mapbox token
+mapboxgl.accessToken = "pk.eyJ1IjoibmVlcmFqbmVnaTE5OTgiLCJhIjoiY21paDF6ZWM1MGNmaTNkcXg4eDA2dW0zNSJ9.GPGQzjD-1GIiVekVOdrJGA";
+
+const MAP_STYLES = {
+  day: "mapbox://styles/mapbox/light-v11",
+  night: "mapbox://styles/mapbox/dark-v11"
+};
+
+let currentMode = "night";
+const modeToggleBtn = document.getElementById("modeToggle");
+
+function applyModeTheme() {
+  if (currentMode === "day") {
+    document.body.classList.add("day-mode");
+    modeToggleBtn.textContent = "Switch to Night Mode";
+  } else {
+    document.body.classList.remove("day-mode");
+    modeToggleBtn.textContent = "Switch to Day Mode";
+  }
+}
+
+applyModeTheme();
+
+// 🌍 Create the globe map
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: MAP_STYLES[currentMode],
+  center: [0, 0],
+  zoom: 1.1,
+  minZoom: 0.5,
+  maxZoom: 3,
+  pitch: 30,
+  bearing: 0,
+  projection: 'globe'
+});
+
+map.on("style.load", () => {
+  map.setProjection("globe");
+  
+  // Day-night shadow effect (like Google Earth)
+  if (map.getSource('mapbox-dem')) {
+    map.setTerrain({ source: 'mapbox-dem', exaggeration: 1 });
+  }
+  
+  // Add atmospheric lighting for day-night effect
+  map.setFog({
+    color: 'rgb(186, 210, 235)',
+    'high-color': 'rgb(36, 92, 223)',
+    'horizon-blend': 0.02,
+    'space-color': 'rgb(11, 11, 25)',
+    'star-intensity': 0.6
+  });
+  
+  // Initialize floating stars
+  createFloatingStars();
+  setInterval(createFloatingStars, 20000); // Add more stars every 20 seconds
+  
+  // Initialize space effects (meteors, satellites, space stones)
+  initializeSpaceEffects();
+  
+  // Initialize stats display with fake data engine
+  if (window.fakeDataEngine) {
+    const counters = window.fakeDataEngine.getCounters();
+    stats.likes = counters.likes;
+    stats.comments = counters.comments;
+    stats.boosts = counters.boosts;
+    stats.countries = new Set(Array.from(window.fakeDataEngine.dailyCounters.countries_active));
+    
+    // Initialize timeline with trend data
+    const trendData = window.fakeDataEngine.getTrendData();
+    if (trendData.length > 0) {
+      stats.timelineData = trendData.slice(-50);
+    }
+  }
+  
+  updateStats();
+  updateLeaderboard();
+  drawTimeline();
+  
+  // Initialize micro-sparkles
+  createMicroSparkles();
+  
+  // Initialize heat bar
+  updateHeatBar();
+});
+
+// ✨ Micro Sparkles
+function createMicroSparkles() {
+  const sparkleCount = 30;
+  
+  for (let i = 0; i < sparkleCount; i++) {
+    setTimeout(() => {
+      const sparkle = document.createElement('div');
+      sparkle.className = 'micro-sparkle';
+      sparkle.style.left = Math.random() * 100 + '%';
+      sparkle.style.top = Math.random() * 100 + '%';
+      sparkle.style.animationDelay = Math.random() * 3 + 's';
+      sparkle.style.animationDuration = (2 + Math.random() * 2) + 's';
+      document.body.appendChild(sparkle);
+      
+      setTimeout(() => {
+        sparkle.style.left = Math.random() * 100 + '%';
+        sparkle.style.top = Math.random() * 100 + '%';
+      }, 5000);
+    }, i * 200);
+  }
+  
+  // Add more sparkles periodically
+  setInterval(() => {
+    const sparkle = document.createElement('div');
+    sparkle.className = 'micro-sparkle';
+    sparkle.style.left = Math.random() * 100 + '%';
+    sparkle.style.top = Math.random() * 100 + '%';
+    sparkle.style.animationDelay = '0s';
+    sparkle.style.animationDuration = (2 + Math.random() * 2) + 's';
+    document.body.appendChild(sparkle);
+    
+    setTimeout(() => sparkle.remove(), 5000);
+  }, 3000);
+}
+
+// 📊 Update Heat Bar
+let heatBarUpdateInterval = null;
+
+function updateHeatBar() {
+  const heatBarFill = document.getElementById('heat-bar-fill');
+  if (!heatBarFill) return;
+  
+  // Calculate activity level based on recent engagement rate
+  // Use events per minute as activity indicator
+  const recentData = stats.timelineData.slice(-30); // Last 30 data points
+  if (recentData.length === 0) {
+    heatBarFill.style.width = '0%';
+    return;
+  }
+  
+  // Calculate engagement rate (events per interval)
+  const engagementRate = recentData.length > 1 
+    ? (recentData[recentData.length - 1] - recentData[0]) / recentData.length
+    : 1;
+  
+  // Normalize to 0-100% (adjust max rate as needed)
+  const maxRate = 5; // Maximum expected events per interval
+  const activityPercent = Math.min((engagementRate / maxRate) * 100, 100);
+  
+  heatBarFill.style.width = Math.max(activityPercent, 10) + '%'; // Minimum 10% for visibility
+}
+
+// Update heat bar periodically
+if (!heatBarUpdateInterval) {
+  heatBarUpdateInterval = setInterval(updateHeatBar, 1000);
+}
+
+function updateFogForMode() {
+  if (currentMode === "day") {
+    map.setFog({
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(100, 150, 255)',
+      'horizon-blend': 0.1,
+      'space-color': 'rgb(200, 220, 255)',
+      'star-intensity': 0.2
+    });
+  } else {
+    map.setFog({
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(36, 92, 223)',
+      'horizon-blend': 0.02,
+      'space-color': 'rgb(11, 11, 25)',
+      'star-intensity': 0.6
+    });
+  }
+}
+
+modeToggleBtn.addEventListener("click", () => {
+  const cameraState = {
+    center: map.getCenter(),
+    zoom: map.getZoom(),
+    pitch: map.getPitch(),
+    bearing: map.getBearing()
+  };
+
+  const newMode = currentMode === "night" ? "day" : "night";
+  
+  // Smooth transition animation
+  const transitionDuration = 2000; // 2 seconds
+  const startTime = Date.now();
+  
+  // Animate body class transition
+  const body = document.body;
+  const starfield = document.querySelector('.starfield');
+  
+  function animateTransition() {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / transitionDuration, 1);
+    
+    if (newMode === "day") {
+      // Transitioning to day
+      body.style.transition = `background 2s ease, color 2s ease`;
+      if (starfield) {
+        starfield.style.opacity = (0.35 * (1 - progress)).toString();
+        starfield.style.transition = 'opacity 2s ease';
+      }
+    } else {
+      // Transitioning to night
+      body.style.transition = `background 2s ease, color 2s ease`;
+      if (starfield) {
+        starfield.style.opacity = (0.35 + 0.25 * progress).toString();
+        starfield.style.transition = 'opacity 2s ease';
+      }
+    }
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateTransition);
+    } else {
+      // Complete transition
+      currentMode = newMode;
+      applyModeTheme();
+      body.style.transition = '';
+      if (starfield) starfield.style.transition = '';
+    }
+  }
+  
+  // Start transition
+  animateTransition();
+  
+  // Smooth fog transition
+  map.once("style.load", () => {
+    map.jumpTo(cameraState);
+    map.setProjection("globe");
+    
+    // Animate fog transition
+    const fogStart = currentMode === "night" ? {
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(36, 92, 223)',
+      'horizon-blend': 0.02,
+      'space-color': 'rgb(11, 11, 25)',
+      'star-intensity': 0.6
+    } : {
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(100, 150, 255)',
+      'horizon-blend': 0.1,
+      'space-color': 'rgb(200, 220, 255)',
+      'star-intensity': 0.2
+    };
+    
+    const fogEnd = newMode === "night" ? {
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(36, 92, 223)',
+      'horizon-blend': 0.02,
+      'space-color': 'rgb(11, 11, 25)',
+      'star-intensity': 0.6
+    } : {
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(100, 150, 255)',
+      'horizon-blend': 0.1,
+      'space-color': 'rgb(200, 220, 255)',
+      'star-intensity': 0.2
+    };
+    
+    // Animate fog
+    let fogProgress = 0;
+    const fogInterval = setInterval(() => {
+      fogProgress += 0.05;
+      if (fogProgress >= 1) {
+        clearInterval(fogInterval);
+        updateFogForMode();
+      } else {
+        // Interpolate fog values
+        const currentFog = {
+          'horizon-blend': fogStart['horizon-blend'] + (fogEnd['horizon-blend'] - fogStart['horizon-blend']) * fogProgress,
+          'star-intensity': fogStart['star-intensity'] + (fogEnd['star-intensity'] - fogStart['star-intensity']) * fogProgress
+        };
+        map.setFog({
+          ...fogEnd,
+          ...currentFog
+        });
+      }
+    }, 100);
+  });
+
+  map.setStyle(MAP_STYLES[newMode]);
+});
+
+// ⭐ Smooth AUTO-ROTATION WITH INTERACTION PAUSE
+let autoRotateId;
+let autoRotateEnabled = true;
+let resumeTimeout;
+
+function rotateGlobe() {
+  if (!autoRotateEnabled) return;
+  const currentBearing = map.getBearing();
+  map.setBearing(currentBearing + 0.08); // slow, smooth rotation
+  autoRotateId = requestAnimationFrame(rotateGlobe);
+}
+
+function startAutoRotate() {
+  if (!autoRotateEnabled) {
+    autoRotateEnabled = true;
+  }
+  cancelAnimationFrame(autoRotateId);
+  autoRotateId = requestAnimationFrame(rotateGlobe);
+}
+
+function pauseAutoRotate() {
+  autoRotateEnabled = false;
+  cancelAnimationFrame(autoRotateId);
+  clearTimeout(resumeTimeout);
+}
+
+function scheduleAutoRotateResume(delay = 2500) {
+  clearTimeout(resumeTimeout);
+  resumeTimeout = setTimeout(() => {
+    autoRotateEnabled = true;
+    startAutoRotate();
+  }, delay);
+}
+
+map.on("load", () => {
+  startAutoRotate();
+
+  const interactionStartEvents = ["mousedown", "dragstart", "touchstart", "wheel"];
+  const interactionEndEvents = ["mouseup", "dragend", "touchend", "moveend"];
+
+  interactionStartEvents.forEach(event =>
+    map.on(event, () => {
+      pauseAutoRotate();
+    })
+  );
+
+  interactionEndEvents.forEach(event =>
+    map.on(event, () => {
+      scheduleAutoRotateResume();
+    })
+  );
+});
+
+// 👤 Avatar list
+const avatars = [
+  "https://randomuser.me/api/portraits/men/1.jpg",
+  "https://randomuser.me/api/portraits/women/2.jpg",
+  "https://randomuser.me/api/portraits/men/3.jpg",
+  "https://randomuser.me/api/portraits/women/4.jpg",
+  "https://randomuser.me/api/portraits/men/5.jpg",
+  "https://randomuser.me/api/portraits/women/6.jpg",
+  "https://randomuser.me/api/portraits/men/7.jpg",
+  "https://randomuser.me/api/portraits/women/8.jpg",
+  "https://randomuser.me/api/portraits/men/9.jpg",
+  "https://randomuser.me/api/portraits/women/10.jpg",
+  "https://randomuser.me/api/portraits/men/11.jpg",
+  "https://randomuser.me/api/portraits/women/12.jpg",
+  "https://randomuser.me/api/portraits/men/13.jpg",
+  "https://randomuser.me/api/portraits/women/14.jpg",
+  "https://randomuser.me/api/portraits/men/15.jpg",
+  "https://randomuser.me/api/portraits/women/16.jpg",
+  "https://randomuser.me/api/portraits/men/17.jpg",
+  "https://randomuser.me/api/portraits/women/18.jpg",
+  "https://randomuser.me/api/portraits/men/19.jpg",
+  "https://randomuser.me/api/portraits/women/20.jpg",
+  "https://randomuser.me/api/portraits/men/21.jpg",
+  "https://randomuser.me/api/portraits/women/22.jpg",
+  "https://randomuser.me/api/portraits/men/23.jpg",
+  "https://randomuser.me/api/portraits/women/24.jpg",
+  "https://randomuser.me/api/portraits/men/25.jpg",
+  "https://randomuser.me/api/portraits/women/26.jpg",
+  "https://randomuser.me/api/portraits/men/27.jpg",
+  "https://randomuser.me/api/portraits/women/28.jpg",
+  "https://randomuser.me/api/portraits/men/29.jpg",
+  "https://randomuser.me/api/portraits/women/30.jpg",
+  "https://randomuser.me/api/portraits/men/31.jpg",
+  "https://randomuser.me/api/portraits/women/32.jpg",
+  "https://randomuser.me/api/portraits/men/33.jpg",
+  "https://randomuser.me/api/portraits/women/34.jpg",
+  "https://randomuser.me/api/portraits/men/35.jpg",
+  "https://randomuser.me/api/portraits/women/36.jpg",
+  "https://randomuser.me/api/portraits/men/37.jpg",
+  "https://randomuser.me/api/portraits/women/38.jpg",
+  "https://randomuser.me/api/portraits/men/39.jpg",
+  "https://randomuser.me/api/portraits/women/40.jpg",
+  "https://randomuser.me/api/portraits/men/41.jpg",
+  "https://randomuser.me/api/portraits/women/42.jpg",
+  "https://randomuser.me/api/portraits/men/43.jpg",
+  "https://randomuser.me/api/portraits/women/44.jpg",
+  "https://randomuser.me/api/portraits/men/45.jpg",
+  "https://randomuser.me/api/portraits/women/46.jpg",
+  "https://randomuser.me/api/portraits/men/47.jpg",
+  "https://randomuser.me/api/portraits/women/48.jpg",
+  "https://randomuser.me/api/portraits/men/49.jpg",
+  "https://randomuser.me/api/portraits/women/50.jpg"
+];
+
+// ⭐⭐⭐ FAKE DATA ENGINE FOR HYPERCLAPPER REALTIME MAP ⭐⭐⭐
+// This module generates completely synthetic engagement data
+
+(function() {
+  'use strict';
+
+  // ========== DAILY MAXIMUM RANGES ==========
+  const DAILY_MAX = {
+    likes: { min: 10000, max: 20000 },
+    comments: { min: 2000, max: 4000 },
+    boosts: { min: 10, max: 30 },
+    countries: { min: 10, max: 40 }
+  };
+
+  // ========== ENGAGEMENT TYPE WEIGHTS ==========
+  const ENGAGEMENT_WEIGHTS = {
+    'Like': 60,
+    'Comment': 20,
+    'Repost': 5,
+    'Boost': 3,
+    'Profile Visit': 10,
+    'Link Click': 2
+  };
+
+  // ========== INDUSTRIES ==========
+  const INDUSTRIES = [
+    'Marketing', 'Sales', 'Tech', 'HR', 'Finance', 
+    'Consulting', 'Engineering', 'Freelancers', 'Creators', 
+    'Education', 'Healthcare', 'Design'
+  ];
+
+  // ========== FIRST NAMES POOL ==========
+  const FIRST_NAMES = [
+    'Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Avery', 'Quinn',
+    'Sam', 'Cameron', 'Dakota', 'Blake', 'Sage', 'River', 'Phoenix', 'Skyler',
+    'Jamie', 'Drew', 'Kai', 'Rowan', 'Finley', 'Hayden', 'Reese', 'Parker',
+    'Emery', 'Quinn', 'Avery', 'Logan', 'Harper', 'Evelyn', 'Liam', 'Noah',
+    'Oliver', 'William', 'Elijah', 'James', 'Benjamin', 'Lucas', 'Mason', 'Ethan',
+    'Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia', 'Charlotte', 'Mia', 'Amelia',
+    'Ella', 'Grace', 'Lily', 'Chloe', 'Zoe', 'Victoria', 'Aria', 'Scarlett'
+  ];
+
+  // ========== LAST INITIALS ==========
+  const LAST_INITIALS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  // ========== COUNTRIES WITH WEIGHTS (LinkedIn Active Only) ==========
+  // Removed: Banned countries (China, Russia, Iran, North Korea)
+  // Removed: Negligible usage countries (Afghanistan, Syria, Sudan, etc.)
+  // Removed: Territories (Puerto Rico, Guam, etc.)
+  
+  const ALL_COUNTRIES = [
+    // Tier 1 – High Activity (Increased weights for US, UK, France, Germany, Italy)
+    { name: 'United States', flag: '🇺🇸', weight: 18, lat: 39.8283, lon: -98.5795 },
+    { name: 'India', flag: '🇮🇳', weight: 10, lat: 20.5937, lon: 78.9629 },
+    { name: 'United Kingdom', flag: '🇬🇧', weight: 12, lat: 55.3781, lon: -3.4360 },
+    { name: 'Canada', flag: '🇨🇦', weight: 7, lat: 56.1304, lon: -106.3468 },
+    { name: 'Australia', flag: '🇦🇺', weight: 6, lat: -25.2744, lon: 133.7751 },
+    { name: 'Germany', flag: '🇩🇪', weight: 10, lat: 51.1657, lon: 10.4515 },
+    { name: 'France', flag: '🇫🇷', weight: 10, lat: 46.2276, lon: 2.2137 },
+    
+    // Tier 2 – Medium Activity
+    { name: 'Netherlands', flag: '🇳🇱', weight: 5, lat: 52.1326, lon: 5.2913 },
+    { name: 'Singapore', flag: '🇸🇬', weight: 5, lat: 1.3521, lon: 103.8198 },
+    { name: 'United Arab Emirates', flag: '🇦🇪', weight: 5, lat: 23.4241, lon: 53.8478 },
+    { name: 'Ireland', flag: '🇮🇪', weight: 4, lat: 53.4129, lon: -8.2439 },
+    { name: 'Spain', flag: '🇪🇸', weight: 4, lat: 40.4637, lon: -3.7492 },
+    { name: 'Italy', flag: '🇮🇹', weight: 9, lat: 41.8719, lon: 12.5674 },
+    { name: 'Brazil', flag: '🇧🇷', weight: 4, lat: -14.2350, lon: -51.9253 },
+    { name: 'South Africa', flag: '🇿🇦', weight: 4, lat: -30.5595, lon: 22.9375 },
+    
+    // Tier 3 – Normal Volume
+    { name: 'Malaysia', flag: '🇲🇾', weight: 3, lat: 4.2105, lon: 101.9758 },
+    { name: 'Indonesia', flag: '🇮🇩', weight: 3, lat: -0.7893, lon: 113.9213 },
+    { name: 'Philippines', flag: '🇵🇭', weight: 3, lat: 12.8797, lon: 121.7740 },
+    { name: 'Saudi Arabia', flag: '🇸🇦', weight: 3, lat: 23.8859, lon: 45.0792 },
+    { name: 'Turkey', flag: '🇹🇷', weight: 3, lat: 38.9637, lon: 35.2433 },
+    { name: 'Japan', flag: '🇯🇵', weight: 3, lat: 36.2048, lon: 138.2529 },
+    { name: 'South Korea', flag: '🇰🇷', weight: 3, lat: 35.9078, lon: 127.7669 },
+    
+    // Tier 4 – Low But Real Activity
+    { name: 'Egypt', flag: '🇪🇬', weight: 2, lat: 26.8206, lon: 30.8025 },
+    { name: 'Nigeria', flag: '🇳🇬', weight: 2, lat: 9.0820, lon: 8.6753 },
+    { name: 'Kenya', flag: '🇰🇪', weight: 2, lat: -0.0236, lon: 37.9062 },
+    { name: 'Pakistan', flag: '🇵🇰', weight: 2, lat: 30.3753, lon: 69.3451 },
+    { name: 'Bangladesh', flag: '🇧🇩', weight: 2, lat: 23.6850, lon: 90.3563 },
+    { name: 'Mexico', flag: '🇲🇽', weight: 2, lat: 23.6345, lon: -102.5528 },
+    { name: 'Colombia', flag: '🇨🇴', weight: 2, lat: 4.5709, lon: -74.2973 },
+    { name: 'Chile', flag: '🇨🇱', weight: 2, lat: -35.6751, lon: -71.5430 },
+    { name: 'Argentina', flag: '🇦🇷', weight: 2, lat: -38.4161, lon: -63.6167 },
+    
+    // Tier 5 – Very Low but Realistic
+    { name: 'Sweden', flag: '🇸🇪', weight: 1, lat: 60.1282, lon: 18.6435 },
+    { name: 'Norway', flag: '🇳🇴', weight: 1, lat: 60.4720, lon: 8.4689 },
+    { name: 'Denmark', flag: '🇩🇰', weight: 1, lat: 56.2639, lon: 9.5018 },
+    { name: 'Finland', flag: '🇫🇮', weight: 1, lat: 61.9241, lon: 25.7482 },
+    { name: 'Switzerland', flag: '🇨🇭', weight: 1, lat: 46.8182, lon: 8.2275 },
+    { name: 'Belgium', flag: '🇧🇪', weight: 1, lat: 50.5039, lon: 4.4699 },
+    { name: 'Portugal', flag: '🇵🇹', weight: 1, lat: 39.3999, lon: -8.2245 },
+    { name: 'Greece', flag: '🇬🇷', weight: 1, lat: 39.0742, lon: 21.8243 },
+    { name: 'Austria', flag: '🇦🇹', weight: 1, lat: 47.5162, lon: 14.5501 },
+    { name: 'Czech Republic', flag: '🇨🇿', weight: 1, lat: 49.8175, lon: 15.4730 },
+    { name: 'Poland', flag: '🇵🇱', weight: 1, lat: 51.9194, lon: 19.1451 },
+    { name: 'New Zealand', flag: '🇳🇿', weight: 1, lat: -40.9006, lon: 174.8860 },
+    { name: 'Israel', flag: '🇮🇱', weight: 1, lat: 31.0461, lon: 34.8516 },
+    { name: 'Qatar', flag: '🇶🇦', weight: 1, lat: 25.3548, lon: 51.1839 },
+    { name: 'Kuwait', flag: '🇰🇼', weight: 1, lat: 29.3117, lon: 47.4818 },
+    { name: 'Oman', flag: '🇴🇲', weight: 1, lat: 21.4735, lon: 55.9754 },
+    { name: 'Bahrain', flag: '🇧🇭', weight: 1, lat: 25.9304, lon: 50.6378 },
+    { name: 'Thailand', flag: '🇹🇭', weight: 1, lat: 15.8700, lon: 100.9925 },
+    { name: 'Vietnam', flag: '🇻🇳', weight: 1, lat: 14.0583, lon: 108.2772 },
+    { name: 'Peru', flag: '🇵🇪', weight: 1, lat: -9.1900, lon: -75.0152 },
+    { name: 'Ecuador', flag: '🇪🇨', weight: 1, lat: -1.8312, lon: -78.1834 },
+    { name: 'Uruguay', flag: '🇺🇾', weight: 1, lat: -32.5228, lon: -55.7658 },
+    { name: 'Costa Rica', flag: '🇨🇷', weight: 1, lat: 9.7489, lon: -83.7534 },
+    { name: 'Panama', flag: '🇵🇦', weight: 1, lat: 8.5380, lon: -80.7821 },
+    { name: 'Romania', flag: '🇷🇴', weight: 1, lat: 45.9432, lon: 24.9668 },
+    { name: 'Hungary', flag: '🇭🇺', weight: 1, lat: 47.1625, lon: 19.5033 },
+    { name: 'Croatia', flag: '🇭🇷', weight: 1, lat: 45.1000, lon: 15.2000 },
+    { name: 'Slovenia', flag: '🇸🇮', weight: 1, lat: 46.1512, lon: 14.9955 },
+    { name: 'Slovakia', flag: '🇸🇰', weight: 1, lat: 48.6690, lon: 19.6990 },
+    { name: 'Bulgaria', flag: '🇧🇬', weight: 1, lat: 42.7339, lon: 25.4858 },
+    { name: 'Serbia', flag: '🇷🇸', weight: 1, lat: 44.0165, lon: 21.0059 },
+    { name: 'Lithuania', flag: '🇱🇹', weight: 1, lat: 55.1694, lon: 23.8813 },
+    { name: 'Latvia', flag: '🇱🇻', weight: 1, lat: 56.8796, lon: 24.6032 },
+    { name: 'Estonia', flag: '🇪🇪', weight: 1, lat: 58.5953, lon: 25.0136 },
+    { name: 'Iceland', flag: '🇮🇸', weight: 1, lat: 64.9631, lon: -19.0208 },
+    { name: 'Luxembourg', flag: '🇱🇺', weight: 1, lat: 49.8153, lon: 6.1296 },
+    { name: 'Malta', flag: '🇲🇹', weight: 1, lat: 35.9375, lon: 14.3754 },
+    { name: 'Cyprus', flag: '🇨🇾', weight: 1, lat: 35.1264, lon: 33.4299 },
+    { name: 'Morocco', flag: '🇲🇦', weight: 1, lat: 31.7917, lon: -7.0926 },
+    { name: 'Tunisia', flag: '🇹🇳', weight: 1, lat: 33.8869, lon: 9.5375 },
+    { name: 'Jordan', flag: '🇯🇴', weight: 1, lat: 30.5852, lon: 36.2384 },
+    { name: 'Lebanon', flag: '🇱🇧', weight: 1, lat: 33.8547, lon: 35.8623 }
+  ];
+
+  // ========== UTILITY FUNCTIONS ==========
+  function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function randomFloat(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function randomChoice(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function weightedRandom(items) {
+    const totalWeight = items.reduce((sum, item) => sum + (item.weight || 1), 0);
+    let random = Math.random() * totalWeight;
+    for (const item of items) {
+      random -= (item.weight || 1);
+      if (random <= 0) return item;
+    }
+    return items[items.length - 1];
+  }
+
+  function generateUniqueId() {
+    return 'p' + Date.now() + Math.random().toString(36).substr(2, 9);
+  }
+
+  // ========== GENERATE 400 SYNTHETIC PROFILES ==========
+  function generateProfiles() {
+    const profiles = [];
+    const usedAvatarIds = new Set();
+    
+    for (let i = 0; i < 400; i++) {
+      let avatarUrl;
+      let avatarId;
+      let attempts = 0;
+      
+      // Generate unique avatar ID to ensure variety
+      do {
+        // Use randomuser.me API for real profile pictures
+        // Generate random ID between 1-2000 to get diverse real photos
+        avatarId = randomInt(1, 2000);
+        attempts++;
+      } while (usedAvatarIds.has(avatarId) && attempts < 100);
+      
+      usedAvatarIds.add(avatarId);
+      
+      // Use randomuser.me for real profile pictures
+      // Alternate between men and women for diversity
+      const gender = Math.random() > 0.5 ? 'men' : 'women';
+      // Use modulo to cycle through available portraits (1-99)
+      const portraitNum = (avatarId % 99) + 1;
+      avatarUrl = `https://randomuser.me/api/portraits/${gender}/${portraitNum}.jpg`;
+      
+      const country = weightedRandom(ALL_COUNTRIES);
+      const firstName = randomChoice(FIRST_NAMES);
+      const lastInitial = randomChoice(LAST_INITIALS);
+      
+      // Add small random offset to country coordinates for variety
+      const lat = country.lat + randomFloat(-2, 2);
+      const lon = country.lon + randomFloat(-2, 2);
+      
+      profiles.push({
+        id: generateUniqueId(),
+        display_name: `${firstName} ${lastInitial}.`,
+        avatar_url: avatarUrl,
+        country: country.name,
+        latitude: lat,
+        longitude: lon,
+        industry: randomChoice(INDUSTRIES)
+      });
+    }
+    
+    return profiles;
+  }
+
+  // ========== DAILY COUNTERS ==========
+  let dailyCounters = {
+    likes: 105867, // Starting value
+    comments: 78765, // Starting value
+    boosts: 116, // Starting value
+    reposts: 0,
+    profile_visits: 0,
+    link_clicks: 0,
+    countries_active: new Set(),
+    last_reset_timestamp: null
+  };
+
+  // Function to initialize countries_active with 82 random countries
+  function initializeActiveCountries() {
+    dailyCounters.countries_active.clear();
+    // Shuffle and take 82 countries
+    const shuffled = [...ALL_COUNTRIES].sort(() => Math.random() - 0.5);
+    const selectedCountries = shuffled.slice(0, 82);
+    selectedCountries.forEach(country => {
+      dailyCounters.countries_active.add(country.name);
+    });
+  }
+
+  // Track daily increments separately (for max limit checks)
+  let dailyIncrements = {
+    likes: 0,
+    comments: 0,
+    boosts: 0
+  };
+
+  // ========== DAILY RESET LOGIC ==========
+  function getUTCMidnight() {
+    const now = new Date();
+    const utcMidnight = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    return utcMidnight.getTime();
+  }
+
+  function shouldReset() {
+    const lastReset = dailyCounters.last_reset_timestamp || 0;
+    const currentMidnight = getUTCMidnight();
+    return currentMidnight > lastReset;
+  }
+
+  function resetDaily() {
+    // Generate random starting values at 00:00 UTC reset
+    // Likes: random between 100000-110000
+    dailyCounters.likes = randomInt(100000, 110000);
+    
+    // Comments: random between 75000-85000
+    dailyCounters.comments = randomInt(75000, 85000);
+    
+    // Boosts: random between 100-130
+    dailyCounters.boosts = randomInt(100, 130);
+    
+    // Reset other counters
+    dailyCounters.reposts = 0;
+    dailyCounters.profile_visits = 0;
+    dailyCounters.link_clicks = 0;
+    
+    // Reset active countries to 82 random countries
+    initializeActiveCountries();
+    
+    dailyCounters.last_reset_timestamp = getUTCMidnight();
+    
+    // Reset daily increments
+    dailyIncrements.likes = 0;
+    dailyIncrements.comments = 0;
+    dailyIncrements.boosts = 0;
+  }
+
+  // Check and reset on startup
+  if (shouldReset()) {
+    resetDaily();
+  }
+  
+  // Always ensure we have 82 countries at startup (if empty)
+  if (dailyCounters.countries_active.size === 0) {
+    initializeActiveCountries();
+  }
+
+  // Check for reset every minute
+  setInterval(() => {
+    if (shouldReset()) {
+      resetDaily();
+    }
+  }, 60000);
+
+  // ========== CITY NAMES BY COUNTRY ==========
+  const COUNTRY_CITIES = {
+    'United States': ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville', 'San Francisco', 'Columbus', 'Fort Worth', 'Charlotte', 'Seattle', 'Denver', 'Boston', 'El Paso'],
+    'India': ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Patna', 'Vadodara', 'Ghaziabad'],
+    'United Kingdom': ['London', 'Manchester', 'Birmingham', 'Glasgow', 'Liverpool', 'Leeds', 'Edinburgh', 'Bristol', 'Cardiff', 'Belfast', 'Newcastle', 'Sheffield', 'Leicester', 'Coventry', 'Nottingham', 'Southampton', 'Portsmouth', 'Brighton', 'Reading', 'Northampton'],
+    'Canada': ['Toronto', 'Vancouver', 'Montreal', 'Calgary', 'Ottawa', 'Edmonton', 'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener', 'London', 'Victoria', 'Halifax', 'Oshawa', 'Windsor', 'Saskatoon', 'Regina', 'Sherbrooke', 'Kelowna', 'Barrie'],
+    'Australia': ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast', 'Newcastle', 'Canberra', 'Sunshine Coast', 'Wollongong', 'Hobart', 'Geelong', 'Townsville', 'Cairns', 'Darwin', 'Toowoomba', 'Ballarat', 'Bendigo', 'Albury', 'Launceston'],
+    'Germany': ['Berlin', 'Munich', 'Hamburg', 'Cologne', 'Frankfurt', 'Stuttgart', 'Düsseldorf', 'Dortmund', 'Essen', 'Leipzig', 'Bremen', 'Dresden', 'Hannover', 'Nuremberg', 'Duisburg', 'Bochum', 'Wuppertal', 'Bielefeld', 'Bonn', 'Münster'],
+    'France': ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes', 'Strasbourg', 'Montpellier', 'Bordeaux', 'Lille', 'Rennes', 'Reims', 'Le Havre', 'Saint-Étienne', 'Toulon', 'Grenoble', 'Dijon', 'Angers', 'Nîmes', 'Villeurbanne'],
+    'Netherlands': ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven', 'Groningen', 'Tilburg', 'Almere', 'Breda', 'Nijmegen', 'Enschede', 'Haarlem', 'Arnhem', 'Zaanstad', 'Amersfoort', 'Apeldoorn', 'Hoofddorp', 'Maastricht', 'Leiden', 'Dordrecht'],
+    'Singapore': ['Singapore'],
+    'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah', 'Al Ain', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
+    'Ireland': ['Dublin', 'Cork', 'Limerick', 'Galway', 'Waterford', 'Drogheda', 'Dundalk', 'Swords', 'Sligo', 'Kilkenny', 'Wexford', 'Clonmel', 'Carlow', 'Tralee', 'Ennis', 'Newbridge', 'Naas', 'Athlone', 'Portlaoise', 'Mullingar'],
+    'Spain': ['Madrid', 'Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Málaga', 'Murcia', 'Palma', 'Las Palmas', 'Bilbao', 'Alicante', 'Córdoba', 'Valladolid', 'Vigo', 'Gijón', 'Hospitalet', 'Granada', 'Vitoria', 'A Coruña', 'Elche'],
+    'Italy': ['Rome', 'Milan', 'Naples', 'Turin', 'Palermo', 'Genoa', 'Bologna', 'Florence', 'Bari', 'Catania', 'Venice', 'Verona', 'Messina', 'Padua', 'Trieste', 'Brescia', 'Taranto', 'Prato', 'Modena', 'Reggio Calabria'],
+    'Brazil': ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza', 'Belo Horizonte', 'Manaus', 'Curitiba', 'Recife', 'Porto Alegre', 'Belém', 'Goiânia', 'Guarulhos', 'Campinas', 'São Luís', 'São Gonçalo', 'Maceió', 'Duque de Caxias', 'Natal', 'Teresina'],
+    'South Africa': ['Johannesburg', 'Cape Town', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'East London', 'Kimberley', 'Polokwane', 'Nelspruit', 'Rustenburg', 'Welkom', 'Pietermaritzburg', 'Benoni', 'Tembisa', 'Vereeniging', 'Boksburg', 'Klerksdorp', 'Soweto', 'Uitenhage'],
+    'Malaysia': ['Kuala Lumpur', 'George Town', 'Ipoh', 'Shah Alam', 'Petaling Jaya', 'Johor Bahru', 'Malacca City', 'Kota Kinabalu', 'Kuching', 'Seremban', 'Kuantan', 'Alor Setar', 'Miri', 'Kota Bharu', 'Sandakan', 'Tawau', 'Kuala Terengganu', 'Sibu', 'Taiping', 'Kangar'],
+    'Indonesia': ['Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Semarang', 'Palembang', 'Makassar', 'Batam', 'Pekanbaru', 'Bandar Lampung', 'Padang', 'Malang', 'Denpasar', 'Banjarmasin', 'Pontianak', 'Balikpapan', 'Jambi', 'Manado', 'Cimahi', 'Yogyakarta'],
+    'Philippines': ['Manila', 'Quezon City', 'Caloocan', 'Davao City', 'Cebu City', 'Zamboanga City', 'Antipolo', 'Cagayan de Oro', 'Pasig', 'Valenzuela', 'Las Piñas', 'Makati', 'Bacolod', 'Parañaque', 'General Santos', 'Muntinlupa', 'San Jose del Monte', 'Bacoor', 'Marikina', 'Muntinlupa'],
+    'Saudi Arabia': ['Riyadh', 'Jeddah', 'Mecca', 'Medina', 'Dammam', 'Khobar', 'Taif', 'Abha', 'Tabuk', 'Buraydah', 'Khamis Mushait', 'Hail', 'Najran', 'Al Jubail', 'Yanbu', 'Al Kharj', 'Arar', 'Sakaka', 'Jizan', 'Dhahran'],
+    'Turkey': ['Istanbul', 'Ankara', 'Izmir', 'Bursa', 'Antalya', 'Adana', 'Gaziantep', 'Konya', 'Kayseri', 'Mersin', 'Eskişehir', 'Diyarbakır', 'Samsun', 'Şanlıurfa', 'Malatya', 'Erzurum', 'Van', 'Batman', 'Elazığ', 'Denizli'],
+    'Japan': ['Tokyo', 'Yokohama', 'Osaka', 'Nagoya', 'Sapporo', 'Fukuoka', 'Kobe', 'Kawasaki', 'Kyoto', 'Saitama', 'Hiroshima', 'Sendai', 'Chiba', 'Kitakyushu', 'Sakai', 'Niigata', 'Hamamatsu', 'Shizuoka', 'Sagamihara', 'Okayama'],
+    'South Korea': ['Seoul', 'Busan', 'Incheon', 'Daegu', 'Daejeon', 'Gwangju', 'Suwon', 'Ulsan', 'Changwon', 'Goyang', 'Yongin', 'Seongnam', 'Bucheon', 'Ansan', 'Anyang', 'Jeonju', 'Cheonan', 'Namyangju', 'Hwaseong', 'Gimhae'],
+    'Egypt': ['Cairo', 'Alexandria', 'Giza', 'Shubra El Kheima', 'Port Said', 'Suez', 'Luxor', 'Aswan', 'Asyut', 'Ismailia', 'Faiyum', 'Zagazig', 'Damietta', 'Mansoura', 'Tanta', 'Minya', 'Beni Suef', 'Qena', 'Sohag', 'Hurghada'],
+    'Nigeria': ['Lagos', 'Kano', 'Ibadan', 'Abuja', 'Port Harcourt', 'Benin City', 'Kaduna', 'Maiduguri', 'Zaria', 'Aba', 'Jos', 'Ilorin', 'Oyo', 'Abeokuta', 'Onitsha', 'Warri', 'Enugu', 'Calabar', 'Akure', 'Uyo'],
+    'Kenya': ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika', 'Malindi', 'Kitale', 'Garissa', 'Kakamega', 'Nyeri', 'Meru', 'Machakos', 'Embu', 'Narok', 'Kericho', 'Bungoma', 'Busia', 'Homa Bay', 'Kilifi'],
+    'Pakistan': ['Karachi', 'Lahore', 'Faisalabad', 'Rawalpindi', 'Multan', 'Gujranwala', 'Peshawar', 'Hyderabad', 'Islamabad', 'Quetta', 'Sargodha', 'Sialkot', 'Bahawalpur', 'Sukkur', 'Larkana', 'Sheikhupura', 'Jhang', 'Rahim Yar Khan', 'Gujrat', 'Kasur'],
+    'Bangladesh': ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Sylhet', 'Comilla', 'Rangpur', 'Mymensingh', 'Barisal', 'Jessore', 'Narayanganj', 'Gazipur', 'Bogra', 'Dinajpur', 'Cox\'s Bazar', 'Tangail', 'Pabna', 'Saidpur', 'Jamalpur', 'Naogaon'],
+    'Mexico': ['Mexico City', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'León', 'Juárez', 'Torreón', 'Querétaro', 'San Luis Potosí', 'Mérida', 'Mexicali', 'Aguascalientes', 'Tampico', 'Culiacán', 'Acapulco', 'Toluca', 'Morelia', 'Chihuahua', 'Saltillo'],
+    'Colombia': ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Cúcuta', 'Bucaramanga', 'Pereira', 'Santa Marta', 'Ibagué', 'Pasto', 'Manizales', 'Neiva', 'Villavicencio', 'Armenia', 'Valledupar', 'Sincelejo', 'Montería', 'Popayán', 'Tunja'],
+    'Chile': ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta', 'Temuco', 'Rancagua', 'Talca', 'Arica', 'Iquique', 'Puerto Montt', 'Los Angeles', 'Chillán', 'Calama', 'Copiapó', 'Osorno', 'Valdivia', 'Punta Arenas', 'Curicó', 'Quilpué'],
+    'Argentina': ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'Tucumán', 'La Plata', 'Mar del Plata', 'Salta', 'Santa Fe', 'San Juan', 'Resistencia', 'Santiago del Estero', 'Corrientes', 'Posadas', 'San Salvador de Jujuy', 'Bahía Blanca', 'Paraná', 'Neuquén', 'Formosa', 'San Luis']
+  };
+
+  // Function to get random city for a country
+  function getRandomCity(countryName) {
+    const cities = COUNTRY_CITIES[countryName];
+    if (cities && cities.length > 0) {
+      return randomChoice(cities);
+    }
+    // Fallback: generate a generic city name for countries without city data
+    const genericCityNames = ['Capital', 'Metro', 'Central', 'Main', 'Hub'];
+    return genericCityNames[Math.floor(Math.random() * genericCityNames.length)] + ' City';
+  }
+
+  // Track last boost time for rate limiting
+  let lastBoostGenerationTime = 0;
+  const MIN_BOOST_INTERVAL = 10000; // Minimum 10 seconds between boosts
+  
+  // ========== EVENT GENERATOR ==========
+  function selectEngagementType() {
+    // Only Like and Comment for popups (Boost is for creating posts)
+    const hasBoostedPosts = dailyCounters.boosts > 0;
+    const now = Date.now();
+    const timeSinceLastBoost = now - lastBoostGenerationTime;
+    
+    // Only allow boost if enough time has passed (slower boost generation)
+    const canGenerateBoost = timeSinceLastBoost >= MIN_BOOST_INTERVAL;
+    
+    if (!hasBoostedPosts) {
+      // If no boosted posts, only generate Boost events (but respect timing)
+      if (canGenerateBoost) {
+        lastBoostGenerationTime = now;
+        return 'Boost';
+      }
+      // If can't generate boost yet, wait (return null will be handled)
+      return null;
+    }
+    
+    // If boosted posts exist, only allow likes and comments
+    // Likes and comments should increase much faster than boosts
+    // Only allow boost if enough time has passed
+    if (canGenerateBoost && Math.random() < 0.15) { // 15% chance for boost (but only if timing allows)
+      lastBoostGenerationTime = now;
+      return 'Boost';
+    }
+    
+    // Otherwise generate likes/comments (much more frequent)
+    const rand = Math.random() * 100;
+    if (rand < 75) return 'Like';  // 75% likes
+    return 'Comment';  // 25% comments
+  }
+
+  function canGenerateEvent(eventType) {
+    // Check daily limits using daily increments (not total counters)
+    switch(eventType) {
+      case 'Like':
+        // Likes can only happen if there are boosted posts
+        return dailyCounters.boosts > 0 && dailyIncrements.likes < DAILY_MAX.likes.max;
+      case 'Comment':
+        // Comments can only happen if there are boosted posts
+        return dailyCounters.boosts > 0 && dailyIncrements.comments < DAILY_MAX.comments.max;
+      case 'Boost':
+        return dailyIncrements.boosts < DAILY_MAX.boosts.max;
+      default:
+        return true;
+    }
+  }
+
+  function generateEvent(profiles) {
+    // Select country based on weights
+    const country = weightedRandom(ALL_COUNTRIES);
+    
+    // Filter profiles from this country
+    const countryProfiles = profiles.filter(p => p.country === country.name);
+    
+    if (countryProfiles.length === 0) {
+      // Fallback: use any profile
+      const profile = randomChoice(profiles);
+      country.name = profile.country;
+      country.lat = profile.latitude;
+      country.lon = profile.longitude;
+      country.flag = ALL_COUNTRIES.find(c => c.name === profile.country)?.flag || '🌍';
+    }
+    
+    // Select random profile from country
+    const profile = countryProfiles.length > 0 
+      ? randomChoice(countryProfiles)
+      : randomChoice(profiles);
+    
+    // Select engagement type
+    let eventType = selectEngagementType();
+    
+    // If selectEngagementType returns null (can't generate boost yet), try again for like/comment
+    if (!eventType) {
+      if (dailyCounters.boosts > 0) {
+        // Generate like or comment instead
+        const rand = Math.random() * 100;
+        eventType = rand < 75 ? 'Like' : 'Comment';
+      } else {
+        // No boosted posts yet, must wait
+        return null;
+      }
+    }
+    
+    // Retry if we can't generate this type
+    let attempts = 0;
+    while (!canGenerateEvent(eventType) && attempts < 10) {
+      eventType = selectEngagementType();
+      if (!eventType && dailyCounters.boosts > 0) {
+        const rand = Math.random() * 100;
+        eventType = rand < 75 ? 'Like' : 'Comment';
+      }
+      attempts++;
+    }
+    
+    if (!canGenerateEvent(eventType)) {
+      return null; // Skip this event
+    }
+    
+    // Update counters and daily increments
+    switch(eventType) {
+      case 'Like':
+        dailyCounters.likes++;
+        dailyIncrements.likes++;
+        break;
+      case 'Comment':
+        dailyCounters.comments++;
+        dailyIncrements.comments++;
+        break;
+      case 'Boost':
+        dailyCounters.boosts++;
+        dailyIncrements.boosts++;
+        break;
+      case 'Repost':
+        dailyCounters.reposts++;
+        break;
+      case 'Profile Visit':
+        dailyCounters.profile_visits++;
+        break;
+      case 'Link Click':
+        dailyCounters.link_clicks++;
+        break;
+    }
+    
+    // Track active countries
+    if (!dailyCounters.countries_active.has(country.name)) {
+      dailyCounters.countries_active.add(country.name);
+    }
+    
+    // Get random city for the country
+    const city = getRandomCity(country.name);
+    
+    // Get random name for the event
+    const firstName = randomChoice(FIRST_NAMES);
+    
+    // Create event object compatible with existing UI
+    const eventTypeMap = {
+      'Like': 'Like',
+      'Comment': 'Comment',
+      'Repost': 'Repost',
+      'Boost': 'Boost',
+      'Profile Visit': 'Profile Visit',
+      'Link Click': 'Link Click'
+    };
+    
+    // Format: "Justin from New York, United States"
+    const locationText = `${city}, ${country.name}`;
+    const eventText = `${firstName} from ${locationText}`;
+    
+    return {
+      type: eventTypeMap[eventType],
+      text: eventText,
+      locationText: locationText, // For feed display
+      personName: firstName, // Person's name
+      city: city,
+      coords: [profile.longitude, profile.latitude],
+      profile: profile,
+      country: country.name,
+      flag: country.flag,
+      timestamp: Date.now()
+    };
+  }
+
+  // ========== RANKING ENGINE ==========
+  let currentRanking = [];
+
+  function generateRanking() {
+    const count = randomInt(5, 7);
+    const selected = [];
+    const used = new Set();
+    
+    // Priority countries that should appear more often
+    const priorityCountries = ['United States', 'United Kingdom', 'France', 'Germany', 'Italy'];
+    
+    // First, try to include priority countries with higher scores
+    priorityCountries.forEach(countryName => {
+      if (selected.length < count && !used.has(countryName)) {
+        const country = ALL_COUNTRIES.find(c => c.name === countryName);
+        if (country) {
+          used.add(countryName);
+          // Give priority countries higher scores (8-15 instead of 1-12)
+          selected.push({
+            country: countryName,
+            flag: country.flag,
+            score: randomInt(8, 15)
+          });
+        }
+      }
+    });
+    
+    // Fill remaining slots with other countries
+    for (let i = selected.length; i < count && i < ALL_COUNTRIES.length; i++) {
+      let country;
+      let attempts = 0;
+      do {
+        // Use weighted random to favor higher weight countries
+        country = weightedRandom(ALL_COUNTRIES);
+        attempts++;
+      } while (used.has(country.name) && attempts < 100);
+      
+      if (!used.has(country.name)) {
+        used.add(country.name);
+        selected.push({
+          country: country.name,
+          flag: country.flag,
+          score: randomInt(1, 10) // Lower scores for non-priority countries
+        });
+      }
+    }
+    
+    selected.sort((a, b) => b.score - a.score);
+    currentRanking = selected;
+    return selected;
+  }
+
+  // Update ranking every 60 seconds
+  setInterval(() => {
+    generateRanking();
+    if (typeof window !== 'undefined' && window.fakeDataEngine) {
+      window.fakeDataEngine.emitRankingUpdate(currentRanking);
+    }
+  }, 60000);
+
+  // ========== TREND GENERATOR ==========
+  let trendData = [];
+  const TREND_WINDOW_SIZE = 90; // 90 minutes
+
+  function initializeTrendData() {
+    const baseValue = randomInt(50, 150);
+    for (let i = 0; i < TREND_WINDOW_SIZE; i++) {
+      const value = baseValue + randomInt(-20, 20) + Math.sin(i * 0.1) * 10;
+      trendData.push(Math.max(10, Math.round(value)));
+    }
+  }
+
+  function updateTrendData() {
+    // Add new value
+    const lastValue = trendData.length > 0 ? trendData[trendData.length - 1] : 100;
+    const change = randomInt(-15, 25);
+    const newValue = Math.max(10, lastValue + change);
+    trendData.push(newValue);
+    
+    // Remove oldest if exceeds window
+    if (trendData.length > TREND_WINDOW_SIZE) {
+      trendData.shift();
+    }
+    
+    return [...trendData];
+  }
+
+  // Initialize trend data
+  initializeTrendData();
+
+  // Update trend every minute
+  setInterval(() => {
+    const updated = updateTrendData();
+    if (typeof window !== 'undefined' && window.fakeDataEngine) {
+      window.fakeDataEngine.emitTrendUpdate(updated);
+    }
+  }, 60000);
+
+  // ========== EVENT EMITTER ==========
+  const eventListeners = {
+    engagement: [],
+    ranking: [],
+    trend: [],
+    counters: []
+  };
+
+  // ========== EXPORT FAKE DATA ENGINE ==========
+  window.fakeDataEngine = {
+    // Initialize
+    profiles: generateProfiles(),
+    countries: ALL_COUNTRIES,
+    dailyCounters: dailyCounters,
+    
+    // Event generation
+    generateEvent: function() {
+      return generateEvent(this.profiles);
+    },
+    
+    // Ranking
+    getRanking: function() {
+      return currentRanking.length > 0 ? currentRanking : generateRanking();
+    },
+    
+    // Trend data
+    getTrendData: function() {
+      return trendData;
+    },
+    
+    // Event listeners
+    onEngagement: function(callback) {
+      eventListeners.engagement.push(callback);
+    },
+    
+    onRankingUpdate: function(callback) {
+      eventListeners.ranking.push(callback);
+    },
+    
+    onTrendUpdate: function(callback) {
+      eventListeners.trend.push(callback);
+    },
+    
+    onCountersUpdate: function(callback) {
+      eventListeners.counters.push(callback);
+    },
+    
+    // Emit functions
+    emitEngagement: function(event) {
+      eventListeners.engagement.forEach(cb => cb(event));
+    },
+    
+    emitRankingUpdate: function(ranking) {
+      eventListeners.ranking.forEach(cb => cb(ranking));
+    },
+    
+    emitTrendUpdate: function(trend) {
+      eventListeners.trend.forEach(cb => cb(trend));
+    },
+    
+    emitCountersUpdate: function(counters) {
+      eventListeners.counters.forEach(cb => cb(counters));
+    },
+    
+    // Get current counters
+    getCounters: function() {
+      return {
+        likes: dailyCounters.likes,
+        comments: dailyCounters.comments,
+        boosts: dailyCounters.boosts,
+        countries: dailyCounters.countries_active.size
+      };
+    },
+    
+    // Reset function (for testing)
+    reset: resetDaily
+  };
+
+  // Generate initial ranking
+  generateRanking();
+  
+})();
+
+// 🟦 Add avatar pin on map
+const AVATAR_FADE_MS = 3000; // 3 seconds - avatars stay fully visible for at least 2 seconds
+const AVATAR_REMOVE_MS = 5000; // 5 seconds - total visibility time (2s visible + 2s fade)
+const EVENT_GAP_MS = 500;
+
+// Track recently used avatars to avoid repeats
+let recentlyUsedAvatars = [];
+const MAX_RECENT_AVATARS = 10;
+
+function getRandomAvatar(event) {
+  // Use profile avatar from fake data engine if available
+  if (event && event.profile && event.profile.avatar_url) {
+    return event.profile.avatar_url;
+  }
+  
+  // Fallback to original avatar selection
+  const availableAvatars = avatars.filter(avatar => !recentlyUsedAvatars.includes(avatar));
+  
+  if (availableAvatars.length === 0) {
+    recentlyUsedAvatars = [];
+    return avatars[Math.floor(Math.random() * avatars.length)];
+  }
+  
+  const selected = availableAvatars[Math.floor(Math.random() * availableAvatars.length)];
+  recentlyUsedAvatars.push(selected);
+  
+  if (recentlyUsedAvatars.length > MAX_RECENT_AVATARS) {
+    recentlyUsedAvatars.shift();
+  }
+  
+  return selected;
+}
+
+// 🌟 Visual Effects Functions
+
+// Country engagement tracking for heat glow
+const countryEngagement = {};
+const countryCoords = {}; // Store coordinates for each country
+const heatCircles = {}; // Store heat circle markers
+
+function getCountryFromEvent(event) {
+  // Use country from event if available (from fake data engine)
+  if (event && event.country) {
+    return event.country;
+  }
+  // Fallback to parsing from text (format: "Justin from New York, United States")
+  const match = event.text.match(/from\s+[^,]+,\s*(.+)$/);
+  return match ? match[1].trim() : null;
+}
+
+function updateCountryHeat(country, coords) {
+  if (!country) return;
+  countryEngagement[country] = (countryEngagement[country] || 0) + 1;
+  countryCoords[country] = coords;
+  updateHeatmapVisualization(country);
+}
+
+function updateHeatmapVisualization(country) {
+  const engagement = countryEngagement[country];
+  const coords = countryCoords[country];
+  
+  if (!coords || engagement < 2) return; // Only show for countries with 2+ engagements
+  
+  // Remove existing heat circle for this country
+  if (heatCircles[country]) {
+    heatCircles[country].remove();
+  }
+  
+  // Calculate circle size based on engagement (max 100px radius)
+  const radius = Math.min(30 + (engagement * 5), 100);
+  const opacity = Math.min(0.3 + (engagement * 0.05), 0.7);
+  
+  // Create heat circle
+  const el = document.createElement('div');
+  el.style.width = radius * 2 + 'px';
+  el.style.height = radius * 2 + 'px';
+  el.style.borderRadius = '50%';
+  el.style.background = `radial-gradient(circle, rgba(0, 234, 255, ${opacity}) 0%, rgba(0, 234, 255, 0) 70%)`;
+  el.style.border = `1px solid rgba(0, 234, 255, ${opacity * 0.5})`;
+  el.style.pointerEvents = 'none';
+  el.style.animation = 'pulseHeat 3s ease-in-out infinite';
+  
+  const marker = new mapboxgl.Marker(el)
+    .setLngLat(coords)
+    .addTo(map);
+  
+  heatCircles[country] = marker;
+  
+  // Remove heat circle after engagement cools down
+  setTimeout(() => {
+    if (heatCircles[country] && countryEngagement[country] === engagement) {
+      heatCircles[country].remove();
+      delete heatCircles[country];
+    }
+  }, 30000); // Remove after 30 seconds of no new engagement
+}
+
+// Shooting star animation between two points
+let lastEventCoords = null;
+
+function createShootingStar(fromCoords, toCoords) {
+  if (!fromCoords || !toCoords) return;
+  
+  try {
+    const from = map.project(fromCoords);
+    const to = map.project(toCoords);
+    
+    const mapContainer = document.getElementById('map');
+    const mapRect = mapContainer.getBoundingClientRect();
+    
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.className = "shooting-star";
+    svg.style.position = "absolute";
+    svg.style.left = mapRect.left + "px";
+    svg.style.top = mapRect.top + "px";
+    svg.style.width = mapRect.width + "px";
+    svg.style.height = mapRect.height + "px";
+    svg.style.pointerEvents = "none";
+    svg.style.zIndex = "1000";
+    
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", from.x);
+    line.setAttribute("y1", from.y);
+    line.setAttribute("x2", to.x);
+    line.setAttribute("y2", to.y);
+    line.setAttribute("class", "shooting-star-line");
+    line.setAttribute("stroke", "#00eaff");
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("opacity", "0.8");
+    
+    svg.appendChild(line);
+    document.body.appendChild(svg);
+    
+    setTimeout(() => svg.remove(), 2000);
+  } catch (e) {
+    // Silently fail if coordinates are invalid
+  }
+}
+
+// Auto-focus jump to location
+function autoFocusJump(coords, intensity = 1) {
+  if (intensity < 0.7) return; // Only jump for significant events
+  
+  const currentZoom = map.getZoom();
+  const targetZoom = Math.min(currentZoom + 0.3, 2.5);
+  
+  map.easeTo({
+    center: coords,
+    zoom: targetZoom,
+    duration: 800,
+    easing: (t) => t * (2 - t) // ease-out
+  });
+  
+  // Return to original view after a delay
+  setTimeout(() => {
+    map.easeTo({
+      zoom: currentZoom,
+      duration: 1000,
+      easing: (t) => t * (2 - t)
+    });
+  }, 1500);
+}
+
+// Create floating stars
+function createFloatingStars() {
+  const starCount = 20;
+  for (let i = 0; i < starCount; i++) {
+    setTimeout(() => {
+      const star = document.createElement("div");
+      star.className = "floating-star";
+      star.style.left = Math.random() * 100 + "%";
+      star.style.top = "100%";
+      star.style.animationDelay = Math.random() * 15 + "s";
+      star.style.animationDuration = (15 + Math.random() * 10) + "s";
+      document.body.appendChild(star);
+      
+      setTimeout(() => star.remove(), 25000);
+    }, i * 1000);
+  }
+}
+
+// Create meteors
+function createMeteor() {
+  const meteor = document.createElement("div");
+  meteor.className = "meteor";
+  
+  // Random starting position from top
+  const startX = Math.random() * 100;
+  const startY = -10;
+  const angle = Math.random() * 30 + 15; // Angle between 15-45 degrees
+  
+  meteor.style.left = startX + "%";
+  meteor.style.top = startY + "%";
+  meteor.style.transform = `rotate(${angle}deg)`;
+  
+  // Create trail
+  const trail = document.createElement("div");
+  trail.className = "meteor-trail";
+  trail.style.left = "50%";
+  trail.style.top = "0";
+  trail.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+  meteor.appendChild(trail);
+  
+  document.body.appendChild(meteor);
+  
+  // Animate meteor
+  const duration = 2000 + Math.random() * 1500; // 2-3.5 seconds
+  meteor.style.animation = `meteorFall ${duration}ms linear forwards`;
+  meteor.style.animationDelay = "0s";
+  
+  // Remove after animation
+  setTimeout(() => {
+    if (meteor.parentNode) {
+      meteor.parentNode.removeChild(meteor);
+    }
+  }, duration);
+}
+
+// Create small satellites
+function createSmallSatellite() {
+  const satellite = document.createElement("div");
+  satellite.className = "small-satellite";
+  
+  // Random animation type (orbit or move)
+  const animationType = Math.random() > 0.5 ? "satelliteOrbit" : "satelliteMove";
+  
+  if (animationType === "satelliteOrbit") {
+    // For orbit, position at center of orbit
+    const centerX = window.innerWidth / 2 + (Math.random() - 0.5) * 200;
+    const centerY = window.innerHeight / 2 + (Math.random() - 0.5) * 200;
+    satellite.style.left = centerX + "px";
+    satellite.style.top = centerY + "px";
+    satellite.style.transformOrigin = "0 0";
+  } else {
+    // For move, start from left side
+    const startY = Math.random() * window.innerHeight;
+    satellite.style.left = "-50px";
+    satellite.style.top = startY + "px";
+  }
+  
+  document.body.appendChild(satellite);
+  
+  const duration = 20000 + Math.random() * 15000; // 20-35 seconds
+  
+  satellite.style.animation = `${animationType} ${duration}ms linear infinite`;
+  satellite.style.animationDelay = Math.random() * 3 + "s";
+  
+  // Remove after a while
+  setTimeout(() => {
+    if (satellite.parentNode) {
+      satellite.parentNode.removeChild(satellite);
+    }
+  }, duration + 10000);
+}
+
+// Create space stones/asteroids
+function createSpaceStone() {
+  const stone = document.createElement("div");
+  stone.className = "space-stone";
+  
+  // Random starting position from bottom
+  const startX = Math.random() * window.innerWidth;
+  const startY = window.innerHeight + 10;
+  
+  stone.style.left = startX + "px";
+  stone.style.top = startY + "px";
+  
+  // Random size variation
+  const size = 3 + Math.random() * 3; // 3-6px
+  stone.style.width = size + "px";
+  stone.style.height = size + "px";
+  
+  document.body.appendChild(stone);
+  
+  // Animate stone
+  const duration = 20000 + Math.random() * 15000; // 20-35 seconds
+  stone.style.animation = `stoneFloat ${duration}ms linear forwards`;
+  stone.style.animationDelay = "0s";
+  
+  // Remove after animation
+  setTimeout(() => {
+    if (stone.parentNode) {
+      stone.parentNode.removeChild(stone);
+    }
+  }, duration);
+}
+
+// Create big space stones/asteroids
+function createBigSpaceStone() {
+  const stone = document.createElement("div");
+  stone.className = "big-space-stone";
+  
+  // Random starting position from bottom
+  const startX = Math.random() * window.innerWidth;
+  const startY = window.innerHeight + 20;
+  
+  stone.style.left = startX + "px";
+  stone.style.top = startY + "px";
+  
+  // Random size variation for big stones (10-15px)
+  const size = 10 + Math.random() * 5;
+  stone.style.width = size + "px";
+  stone.style.height = size + "px";
+  
+  document.body.appendChild(stone);
+  
+  // Animate big stone (slower movement)
+  const duration = 30000 + Math.random() * 20000; // 30-50 seconds
+  stone.style.animation = `bigStoneFloat ${duration}ms linear forwards`;
+  stone.style.animationDelay = "0s";
+  
+  // Remove after animation
+  setTimeout(() => {
+    if (stone.parentNode) {
+      stone.parentNode.removeChild(stone);
+    }
+  }, duration);
+}
+
+// Initialize space effects
+function initializeSpaceEffects() {
+  // Create initial meteors (spread out)
+  setTimeout(() => createMeteor(), 5000);
+  setTimeout(() => createMeteor(), 15000);
+  
+  // Create initial satellites (spread out)
+  setTimeout(() => createSmallSatellite(), 10000);
+  setTimeout(() => createSmallSatellite(), 25000);
+  
+  // Create initial space stones (spread out)
+  setTimeout(() => createSpaceStone(), 8000);
+  setTimeout(() => createSpaceStone(), 20000);
+  
+  // Create initial big stones
+  setTimeout(() => createBigSpaceStone(), 12000);
+  
+  // Schedule random meteors over 30 minutes (1800000ms)
+  // Meteors appear randomly every 2-8 minutes
+  function scheduleNextMeteor() {
+    const delay = 120000 + Math.random() * 360000; // 2-8 minutes
+    setTimeout(() => {
+      createMeteor();
+      scheduleNextMeteor(); // Schedule next one
+    }, delay);
+  }
+  scheduleNextMeteor();
+  
+  // Schedule random satellites over 30 minutes
+  // Satellites appear randomly every 3-10 minutes
+  function scheduleNextSatellite() {
+    const delay = 180000 + Math.random() * 420000; // 3-10 minutes
+    setTimeout(() => {
+      createSmallSatellite();
+      scheduleNextSatellite(); // Schedule next one
+    }, delay);
+  }
+  scheduleNextSatellite();
+  
+  // Schedule random small stones over 30 minutes
+  // Small stones appear randomly every 2-6 minutes
+  function scheduleNextSmallStone() {
+    const delay = 120000 + Math.random() * 240000; // 2-6 minutes
+    setTimeout(() => {
+      createSpaceStone();
+      scheduleNextSmallStone(); // Schedule next one
+    }, delay);
+  }
+  scheduleNextSmallStone();
+  
+  // Schedule random big stones over 30 minutes
+  // Big stones appear randomly every 5-12 minutes (less frequent)
+  function scheduleNextBigStone() {
+    const delay = 300000 + Math.random() * 420000; // 5-12 minutes
+    setTimeout(() => {
+      createBigSpaceStone();
+      scheduleNextBigStone(); // Schedule next one
+    }, delay);
+  }
+  scheduleNextBigStone();
+}
+
+// 👤 Hover Card Functionality
+function setupHoverCard(avatarElement, marker, event, country, avatarUrl) {
+  let hoverCard = null;
+  let hoverTimeout = null;
+  
+  avatarElement.style.cursor = 'pointer';
+  
+  avatarElement.addEventListener('mouseenter', () => {
+    hoverTimeout = setTimeout(() => {
+      // Create hover card
+      hoverCard = document.createElement('div');
+      hoverCard.className = 'hover-card';
+      
+      // Extract location from event (format: "Justin from New York, United States")
+      const personName = event.personName || (event.text.match(/^([^f]+)\s+from/) ? event.text.match(/^([^f]+)\s+from/)[1].trim() : 'Unknown');
+      const location = event.locationText || (event.text.match(/from\s+(.+)$/) ? event.text.match(/from\s+(.+)$/)[1] : 'Unknown');
+      
+      // Get flag from event or country flags
+      let flag = '🌍';
+      if (event.flag) {
+        flag = event.flag;
+      } else {
+        const countryData = window.fakeDataEngine.countries.find(c => c.name === country);
+        flag = countryData ? countryData.flag : (countryFlags[country] || '🌍');
+      }
+      
+      hoverCard.innerHTML = `
+        <div class="hover-card-header">
+          <div class="hover-card-avatar" style="background-image: url('${avatarUrl}')"></div>
+          <div class="hover-card-info">
+            <div class="hover-card-name">${personName}</div>
+            <div class="hover-card-location">${flag} ${location}</div>
+          </div>
+        </div>
+        <div class="hover-card-stats">
+          <div class="hover-card-stat">
+            <div class="hover-card-stat-value">${stats.likes}</div>
+            <div class="hover-card-stat-label">Likes</div>
+          </div>
+          <div class="hover-card-stat">
+            <div class="hover-card-stat-value">${stats.comments}</div>
+            <div class="hover-card-stat-label">Comments</div>
+          </div>
+          <div class="hover-card-stat">
+            <div class="hover-card-stat-value">${stats.countries.size}</div>
+            <div class="hover-card-stat-label">Countries</div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('hover-card-container').appendChild(hoverCard);
+      
+      // Position card near avatar
+      const point = map.project(event.coords);
+      hoverCard.style.left = (point.x + 30) + 'px';
+      hoverCard.style.top = (point.y - 80) + 'px';
+      
+      // Show with animation
+      setTimeout(() => hoverCard.classList.add('show'), 10);
+    }, 300); // Show after 300ms hover
+  });
+  
+  avatarElement.addEventListener('mouseleave', () => {
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+    if (hoverCard) {
+      hoverCard.classList.remove('show');
+      setTimeout(() => {
+        if (hoverCard && hoverCard.parentNode) {
+          hoverCard.parentNode.removeChild(hoverCard);
+        }
+        hoverCard = null;
+      }, 300);
+    }
+  });
+}
+
+function addAvatar(event) {
+  return new Promise((resolve) => {
+    const avatar = document.createElement("div");
+    avatar.className = "avatar-pin";
+    avatar.style.backgroundImage = `url('${getRandomAvatar(event)}')`;
+
+    // Add pulsating rings
+    for (let i = 0; i < 3; i++) {
+      const ring = document.createElement("div");
+      ring.className = "pulse-ring";
+      avatar.appendChild(ring);
+    }
+
+    const burst = document.createElement("span");
+    // Map event types to icons and classes
+    let burstClass = "burst-comment";
+    let burstIcon = "💬";
+    if (event.type === "Like") {
+      burstClass = "burst-like";
+      burstIcon = "❤️";
+    } else if (event.type === "Repost") {
+      burstClass = "burst-comment";
+      burstIcon = "🔁";
+    } else if (event.type === "Boost") {
+      burstClass = "burst-like";
+      burstIcon = "🚀";
+    } else if (event.type === "Profile Visit") {
+      burstClass = "burst-comment";
+      burstIcon = "👀";
+    } else if (event.type === "Link Click") {
+      burstClass = "burst-comment";
+      burstIcon = "🔗";
+    }
+    burst.className = `burst-icon ${burstClass}`;
+    burst.textContent = burstIcon;
+    avatar.appendChild(burst);
+
+    const marker = new mapboxgl.Marker(avatar)
+      .setLngLat(event.coords)
+      .addTo(map);
+
+    // Add hover card functionality
+    const country = getCountryFromEvent(event);
+    // Use profile avatar URL if available, otherwise extract from style
+    const avatarUrl = (event.profile && event.profile.avatar_url) 
+      ? event.profile.avatar_url 
+      : avatar.style.backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/)[1];
+    setupHoverCard(avatar, marker, event, country, avatarUrl);
+
+    // Update country heat
+    updateCountryHeat(country, event.coords);
+
+    // Shooting star from last location
+    if (lastEventCoords) {
+      createShootingStar(lastEventCoords, event.coords);
+    }
+    lastEventCoords = event.coords;
+
+    // Auto-focus jump (random chance for "big events")
+    const isBigEvent = Math.random() > 0.85; // 15% chance
+    if (isBigEvent) {
+      autoFocusJump(event.coords, 1);
+    }
+
+    setTimeout(() => avatar.classList.add("fade-out"), AVATAR_FADE_MS);
+    setTimeout(() => {
+      burst.remove();
+      marker.remove();
+      resolve();
+    }, AVATAR_REMOVE_MS);
+  });
+}
+
+// 🏳️ Country to flag emoji mapping
+const countryFlags = {
+  "United Kingdom": "🇬🇧",
+  "India": "🇮🇳",
+  "United States": "🇺🇸",
+  "France": "🇫🇷",
+  "Australia": "🇦🇺",
+  "Japan": "🇯🇵",
+  "Canada": "🇨🇦",
+  "Brazil": "🇧🇷",
+  "Mexico": "🇲🇽",
+  "Germany": "🇩🇪",
+  "Spain": "🇪🇸",
+  "Italy": "🇮🇹",
+  "South Africa": "🇿🇦",
+  "Russia": "🇷🇺",
+  "South Korea": "🇰🇷",
+  "Singapore": "🇸🇬",
+  "Thailand": "🇹🇭",
+  "United Arab Emirates": "🇦🇪",
+  "Kenya": "🇰🇪",
+  "Argentina": "🇦🇷",
+  "Chile": "🇨🇱",
+  "Peru": "🇵🇪",
+  "Colombia": "🇨🇴",
+  "Denmark": "🇩🇰",
+  "Sweden": "🇸🇪",
+  "Finland": "🇫🇮",
+  "Norway": "🇳🇴",
+  "Iceland": "🇮🇸",
+  "Ireland": "🇮🇪",
+  "Portugal": "🇵🇹",
+  "Switzerland": "🇨🇭",
+  "Austria": "🇦🇹",
+  "Czech Republic": "🇨🇿",
+  "Poland": "🇵🇱",
+  "Hungary": "🇭🇺",
+  "Greece": "🇬🇷",
+  "Turkey": "🇹🇷",
+  "Israel": "🇮🇱",
+  "Egypt": "🇪🇬",
+  "Morocco": "🇲🇦",
+  "Qatar": "🇶🇦",
+  "Malaysia": "🇲🇾"
+};
+
+function getCountryFlag(text, event) {
+  // Use flag from event if available (from fake data engine)
+  if (event && event.flag) {
+    return event.flag;
+  }
+  
+  // Extract country name from text (after "from City, Country")
+  const match = text.match(/from\s+[^,]+,\s*(.+)$/);
+  if (match) {
+    const country = match[1].trim();
+    // Check fake data engine countries
+    const countryData = window.fakeDataEngine.countries.find(c => c.name === country);
+    if (countryData) {
+      return countryData.flag;
+    }
+    return countryFlags[country] || "🌍";
+  }
+  return "🌍";
+}
+
+// 🟩 Add entry to engagement feed
+function addFeedItem(event) {
+  const feed = document.getElementById("activity-feed");
+
+  // Remove all existing feed items to replace with new one
+  while (feed.firstChild) {
+    feed.removeChild(feed.firstChild);
+  }
+
+  const flag = getCountryFlag(event.text, event);
+  // Use personName if available, otherwise extract from text
+  const personName = event.personName || (event.text.match(/^([^f]+)\s+from/) ? event.text.match(/^([^f]+)\s+from/)[1].trim() : '');
+  // Use locationText if available, otherwise extract from text
+  const location = event.locationText || (event.text.match(/from\s+(.+)$/) ? event.text.match(/from\s+(.+)$/)[1] : event.text);
+  
+  // Get icon based on event type
+  const eventIcon = event.type === 'Like' ? '👍' : (event.type === 'Comment' ? '💬' : '');
+  
+  const item = document.createElement("div");
+  item.className = "feed-item";
+  item.innerHTML = `
+    ${eventIcon} <b>${event.type}</b> by <b>${personName}</b> <span class="feed-location">from ${location}</span> ${flag}
+    <br><span style="opacity:0.6">just now</span>
+  `;
+
+  feed.appendChild(item);
+
+  setTimeout(() => item.classList.add("show"), 30);
+
+  // Remove after 12 seconds
+  setTimeout(() => {
+    item.style.opacity = 0;
+    item.style.transform = "translateY(20px)";
+  }, 12000);
+  setTimeout(() => item.remove(), 13500);
+}
+
+// 📊 Engagement Data Intelligence
+
+// Tracking variables
+let stats = {
+  likes: 0,
+  comments: 0,
+  boosts: 0,
+  countries: new Set(),
+  hourlyCountryEngagement: {}, // Track engagement per country per hour
+  timelineData: [] // Store engagement over time for graph
+};
+
+// Cluster detection
+const countryEventHistory = {}; // Track recent events per country
+const CLUSTER_THRESHOLD = 5; // 5 events
+const CLUSTER_WINDOW = 60000; // 60 seconds
+let activeTrendingCountries = new Set();
+
+// Update stats counters
+function updateStats() {
+  // Always get fresh counter values, especially for boosts
+  const dailyCounters = window.fakeDataEngine.dailyCounters;
+  stats.likes = dailyCounters.likes;
+  stats.comments = dailyCounters.comments;
+  stats.boosts = dailyCounters.boosts; // Always get latest boost count
+  stats.countries = new Set(Array.from(dailyCounters.countries_active));
+  
+  document.getElementById('likes-count').textContent = stats.likes;
+  document.getElementById('comments-count').textContent = stats.comments;
+  document.getElementById('boosts-count').textContent = stats.boosts;
+  document.getElementById('countries-count').textContent = stats.countries.size;
+}
+
+// Update leaderboard
+function updateLeaderboard() {
+  const leaderboardList = document.getElementById('leaderboard-list');
+  leaderboardList.innerHTML = '';
+  
+  // Get ranking from fake data engine
+  const ranking = window.fakeDataEngine.getRanking();
+  
+  if (ranking.length === 0) {
+    leaderboardList.innerHTML = '<div style="opacity:0.6; font-size:12px;">No data yet</div>';
+    return;
+  }
+  
+  ranking.forEach((item) => {
+    const listItem = document.createElement('div');
+    listItem.className = 'leaderboard-item';
+    listItem.innerHTML = `
+      <div class="leaderboard-country">
+        <span>${item.flag}</span>
+        <span>${item.country}</span>
+      </div>
+      <span class="leaderboard-count">${item.score}</span>
+    `;
+    leaderboardList.appendChild(listItem);
+  });
+}
+
+// Draw timeline graph
+function drawTimeline() {
+  const canvas = document.getElementById('timeline-canvas');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width = canvas.offsetWidth;
+  const height = canvas.height = canvas.offsetHeight;
+  
+  // Keep only last 30 data points
+  const data = stats.timelineData.slice(-30);
+  if (data.length < 2) return;
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, width, height);
+  
+  // Find max value for scaling
+  const maxValue = Math.max(...data, 1);
+  
+  // Draw grid
+  ctx.strokeStyle = 'rgba(0, 234, 255, 0.2)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = (height / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  
+  // Draw line
+  ctx.strokeStyle = '#00eaff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  
+  data.forEach((value, index) => {
+    const x = (width / (data.length - 1)) * index;
+    const y = height - (value / maxValue) * height;
+    
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  
+  ctx.stroke();
+  
+  // Draw fill
+  ctx.fillStyle = 'rgba(0, 234, 255, 0.1)';
+  ctx.lineTo(width, height);
+  ctx.lineTo(0, height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Detect clusters and show trending alerts
+function detectCluster(country, coords) {
+  const now = Date.now();
+  
+  // Initialize or clean old events
+  if (!countryEventHistory[country]) {
+    countryEventHistory[country] = [];
+  }
+  
+  // Remove events older than CLUSTER_WINDOW
+  countryEventHistory[country] = countryEventHistory[country].filter(
+    time => now - time < CLUSTER_WINDOW
+  );
+  
+  // Add current event
+  countryEventHistory[country].push(now);
+  
+  // Check if threshold reached
+  if (countryEventHistory[country].length >= CLUSTER_THRESHOLD && !activeTrendingCountries.has(country)) {
+    activeTrendingCountries.add(country);
+    showTrendingAlert(country, coords);
+    
+    // Add glow to country heat circle
+    if (heatCircles[country]) {
+      const marker = heatCircles[country];
+      const circleEl = marker._element || marker.getElement();
+      if (circleEl) {
+        circleEl.classList.add('country-trending-glow');
+      }
+    }
+    
+    // Remove trending status after 10 seconds
+    setTimeout(() => {
+      activeTrendingCountries.delete(country);
+      if (heatCircles[country]) {
+        const marker = heatCircles[country];
+        const circleEl = marker._element || marker.getElement();
+        if (circleEl) {
+          circleEl.classList.remove('country-trending-glow');
+        }
+      }
+    }, 10000);
+  }
+}
+
+// Show trending alert
+function showTrendingAlert(country, coords) {
+  // Get flag from fake data engine
+  const countryData = window.fakeDataEngine.countries.find(c => c.name === country);
+  const flag = countryData ? countryData.flag : (countryFlags[country] || '🌍');
+  
+  const alert = document.createElement('div');
+  alert.className = 'trending-alert';
+  alert.innerHTML = `
+    <div class="trending-alert-content">
+      <span>🔥</span>
+      <span>${country} is trending right now!</span>
+    </div>
+  `;
+  document.body.appendChild(alert);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    alert.style.opacity = '0';
+    alert.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    alert.style.transition = 'all 0.3s ease-out';
+    setTimeout(() => alert.remove(), 300);
+  }, 3000);
+}
+
+// Track engagement event
+function trackEngagement(event) {
+  const country = event.country || getCountryFromEvent(event);
+  
+  // Get counters from fake data engine (this includes boosts)
+  // Access dailyCounters directly to ensure we get the latest boost count
+  const dailyCounters = window.fakeDataEngine.dailyCounters;
+  stats.likes = dailyCounters.likes;
+  stats.comments = dailyCounters.comments;
+  stats.boosts = dailyCounters.boosts; // Direct access to ensure boost counter is updated
+  stats.countries = new Set(Array.from(dailyCounters.countries_active));
+  
+  // Track countries
+  if (country) {
+    // Update hourly engagement
+    if (!stats.hourlyCountryEngagement[country]) {
+      stats.hourlyCountryEngagement[country] = 0;
+    }
+    stats.hourlyCountryEngagement[country]++;
+    
+    // Detect clusters
+    detectCluster(country, event.coords);
+  }
+  
+  // Update timeline data from fake data engine
+  const trendData = window.fakeDataEngine.getTrendData();
+  if (trendData.length > 0) {
+    stats.timelineData = trendData.slice(-50); // Keep last 50 points
+  }
+  
+  // Update UI immediately - especially important for boost counter
+  updateStats();
+  updateLeaderboard();
+  drawTimeline();
+  updateHeatBar();
+}
+
+// Update leaderboard from ranking engine every 60 seconds
+window.fakeDataEngine.onRankingUpdate((ranking) => {
+  updateLeaderboard();
+});
+
+// Update timeline from trend generator every minute
+window.fakeDataEngine.onTrendUpdate((trendData) => {
+  stats.timelineData = trendData.slice(-50);
+    drawTimeline();
+});
+
+// Update counters periodically (backup sync) - more frequent for faster UI updates
+setInterval(() => {
+  const dailyCounters = window.fakeDataEngine.dailyCounters;
+  stats.likes = dailyCounters.likes;
+  stats.comments = dailyCounters.comments;
+  stats.boosts = dailyCounters.boosts; // Direct access to boost counter
+  stats.countries = new Set(Array.from(dailyCounters.countries_active));
+  updateStats();
+}, 500); // Check every 0.5 seconds for faster UI updates
+
+// Use fake data engine for events
+async function runEventLoop() {
+  while (true) {
+    const e = window.fakeDataEngine.generateEvent();
+    if (e) {
+      // Only show Like and Comment in popups (skip Boost, Repost, etc.)
+      if (e.type === 'Like' || e.type === 'Comment') {
+    trackEngagement(e); // Track the engagement
+    addFeedItem(e);
+    await addAvatar(e);
+      } else if (e.type === 'Boost') {
+        // Track boost events but don't show popup
+        const dailyCounters = window.fakeDataEngine.dailyCounters;
+        stats.boosts = dailyCounters.boosts;
+        document.getElementById('boosts-count').textContent = stats.boosts;
+        trackEngagement(e);
+      }
+    }
+    // Very fast delay - 0.5 to 0.9 seconds for rapid likes/comments increase
+    const delay = 500 + Math.random() * 400; // 0.5-0.9 seconds (2-4x faster than before)
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+// 🎥 Video Export Functionality
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingStartTime = null;
+let recordingTimer = null;
+let isRecording = false;
+const MAX_RECORDING_DURATION = 15000; // 15 seconds (default 10-15 seconds)
+
+const recordBtn = document.getElementById('record-btn');
+const recordTimer = document.getElementById('record-timer');
+const embedWidgetBtn = document.getElementById('embed-widget-btn');
+
+// Start/Stop recording
+recordBtn.addEventListener('click', async () => {
+  // Prevent double-clicking
+  if (recordBtn.disabled) {
+    return;
+  }
+  
+  if (!isRecording) {
+    recordBtn.disabled = true;
+    await startRecording();
+  } else {
+    stopRecording();
+  }
+});
+
+async function startRecording() {
+  try {
+    // Get the Mapbox canvas element
+    const mapCanvas = map.getCanvas();
+    if (!mapCanvas) {
+      throw new Error('Map canvas not available');
+    }
+
+    // Capture stream from canvas at 30 FPS
+    const stream = mapCanvas.captureStream(30);
+    
+    // Get canvas dimensions for quality indicator
+    const qualityIndicator = document.getElementById('record-quality');
+    const canvasWidth = mapCanvas.width || 1920;
+    const canvasHeight = mapCanvas.height || 1080;
+      
+      // Determine quality label
+      let qualityLabel = '4K';
+    if (canvasWidth >= 3840 && canvasHeight >= 2160) {
+        qualityLabel = '4K';
+    } else if (canvasWidth >= 2560 && canvasHeight >= 1440) {
+        qualityLabel = '2K';
+    } else if (canvasWidth >= 1920 && canvasHeight >= 1080) {
+        qualityLabel = '1080p';
+      } else {
+      qualityLabel = `${canvasWidth}x${canvasHeight}`;
+      }
+      qualityIndicator.textContent = qualityLabel;
+
+    // Create MediaRecorder with optimal settings
+    const options = {
+      mimeType: 'video/webm;codecs=vp9',
+      videoBitsPerSecond: 8000000 // 8 Mbps for good quality
+    };
+
+    // Fallback options
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        options.mimeType = 'video/webm;codecs=vp9';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+        options.mimeType = 'video/webm;codecs=vp8';
+        options.videoBitsPerSecond = 6000000; // 6 Mbps for VP8
+      } else {
+        // Final fallback
+        options.mimeType = 'video/webm';
+        options.videoBitsPerSecond = 5000000; // 5 Mbps minimum
+      }
+    }
+
+    mediaRecorder = new MediaRecorder(stream, options);
+    recordedChunks = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunks.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      a.download = `hyperclapper_map_recording_${timestamp}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Stop all tracks
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    mediaRecorder.onerror = (event) => {
+      console.error('MediaRecorder error:', event);
+      stopRecording();
+      alert('Recording error occurred. Please try again.');
+    };
+
+    mediaRecorder.start(100); // Collect data every 100ms for smoother recording
+    isRecording = true;
+    recordBtn.textContent = '⏹️ Stop Recording';
+    recordBtn.disabled = false; // Re-enable button so user can stop recording
+    recordBtn.classList.add('recording');
+    recordingStartTime = Date.now();
+
+    // Update timer
+    const timerElement = document.getElementById('record-timer');
+    if (timerElement) {
+      timerElement.textContent = '00:00';
+    }
+    
+    // Clear any existing timer
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+    }
+    
+    recordingTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+      const seconds = (elapsed % 60).toString().padStart(2, '0');
+      const timerEl = document.getElementById('record-timer');
+      if (timerEl) {
+        timerEl.textContent = `${minutes}:${seconds}`;
+      }
+
+      // Auto-stop at 15 seconds (or MAX_RECORDING_DURATION)
+      if (elapsed >= MAX_RECORDING_DURATION / 1000) {
+        stopRecording();
+      }
+    }, 1000);
+
+    // Handle stream track ending
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      if (isRecording) {
+        stopRecording();
+      }
+    });
+
+  } catch (error) {
+    console.error('Error starting recording:', error);
+    isRecording = false;
+    recordBtn.textContent = '🎥 Record Video';
+    recordBtn.classList.remove('recording');
+    recordBtn.disabled = false;
+    alert('Unable to start recording: ' + error.message);
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    try {
+      if (mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+      }
+    } catch (error) {
+      console.error('Error stopping recorder:', error);
+    }
+    
+    isRecording = false;
+    recordBtn.textContent = '🎥 Record Video';
+    recordBtn.classList.remove('recording');
+    recordBtn.disabled = false;
+    
+    if (recordingTimer) {
+      clearInterval(recordingTimer);
+      recordingTimer = null;
+    }
+    
+    const timerElement = document.getElementById('record-timer');
+    if (timerElement) {
+      timerElement.textContent = '';
+    }
+    
+    // Reset quality indicator
+    const qualityIndicator = document.getElementById('record-quality');
+    if (qualityIndicator) {
+      qualityIndicator.textContent = '4K';
+    }
+  }
+}
+
+// 📦 Embed Widget Code Generator
+embedWidgetBtn.addEventListener('click', () => {
+  // Get the base URL and construct embed.html path
+  const currentUrl = window.location.href;
+  const baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1);
+  const embedUrl = baseUrl + 'embed.html';
+  
+  const embedCode = `<iframe src="${embedUrl}" 
+  width="600" 
+  height="400" 
+  frameborder="0" 
+  style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);"
+  allowfullscreen></iframe>`;
+
+  const embedText = `<div style="text-align: center;">
+  <h3>Hyperclapper Live Engagement Globe</h3>
+  ${embedCode}
+  <p style="font-size: 12px; opacity: 0.7; margin-top: 10px;">
+    <a href="${window.location.href}" target="_blank">View Full Version</a>
+  </p>
+</div>`;
+
+  // Create modal to show embed code
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+  `;
+
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = `
+    background: rgba(0, 23, 45, 0.95);
+    border: 2px solid rgba(0, 234, 255, 0.6);
+    border-radius: 16px;
+    padding: 30px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: #fff;
+  `;
+
+  modalContent.innerHTML = `
+    <h2 style="margin-top: 0; color: #00eaff;">📦 Embed Widget Code</h2>
+    <p style="opacity: 0.8; margin-bottom: 20px;">Copy this code to embed the globe widget on your website:</p>
+    <textarea id="embed-code-textarea" 
+      style="width: 100%; 
+             height: 200px; 
+             padding: 15px; 
+             background: rgba(0,0,0,0.5); 
+             border: 1px solid rgba(0,234,255,0.3); 
+             border-radius: 8px; 
+             color: #fff; 
+             font-family: monospace; 
+             font-size: 13px;
+             resize: vertical;"
+      readonly>${embedText}</textarea>
+    <div style="margin-top: 20px; display: flex; gap: 10px;">
+      <button id="copy-embed-btn" 
+        style="padding: 10px 20px; 
+               background: rgba(0, 234, 255, 0.8); 
+               border: 1px solid #00eaff; 
+               border-radius: 8px; 
+               color: #fff; 
+               cursor: pointer;
+               font-weight: 600;
+               flex: 1;">
+        📋 Copy Code
+      </button>
+      <button id="close-embed-modal" 
+        style="padding: 10px 20px; 
+               background: rgba(255, 95, 162, 0.8); 
+               border: 1px solid #ff5fa2; 
+               border-radius: 8px; 
+               color: #fff; 
+               cursor: pointer;
+               font-weight: 600;
+               flex: 1;">
+        ✕ Close
+      </button>
+    </div>
+    <p style="font-size: 12px; opacity: 0.6; margin-top: 20px;">
+      The embed widget is ready to use! Make sure embed.html is in the same directory.
+    </p>
+  `;
+
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+
+  const copyBtn = document.getElementById('copy-embed-btn');
+  const closeBtn = document.getElementById('close-embed-modal');
+  const textarea = document.getElementById('embed-code-textarea');
+
+  copyBtn.addEventListener('click', () => {
+    textarea.select();
+    document.execCommand('copy');
+    copyBtn.textContent = '✅ Copied!';
+    setTimeout(() => {
+      copyBtn.textContent = '📋 Copy Code';
+    }, 2000);
+  });
+
+  closeBtn.addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
+});
+
+// Start event loop after map is loaded and fake data engine is ready
+map.on("load", () => {
+  // Wait a bit for everything to initialize
+  setTimeout(() => {
+    if (window.fakeDataEngine) {
+runEventLoop();
+    }
+  }, 1000);
+});
+
+</script>
+
+</body>
+</html>
